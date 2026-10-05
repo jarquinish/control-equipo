@@ -585,6 +585,7 @@ a.kpi:hover {
 
 /* ───────── Tablas ───────── */
 .table-wrap {
+  position: relative;
   width: 100%;
   overflow-x: auto;
 }
@@ -668,6 +669,7 @@ a.cell-title:hover,
   margin: -8px 0 0;
 }
 .tabs {
+  position: relative;
   display: flex;
   gap: 4px;
   border-bottom: 1px solid var(--line);

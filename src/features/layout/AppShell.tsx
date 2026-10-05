@@ -253,8 +253,13 @@ function GlobalSearch() {
     if (t.length < 2) return [];
     const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
     const nt = norm(t);
-    const out: { key: string; label: string; meta: string; to: string }[] = [];
-    for (const p of db.projects) if (norm(`${p.nombre} ${p.descripcion}`).includes(nt)) out.push({ key: p.id, label: p.nombre, meta: `Proyecto · ${p.prioridadFinal}`, to: `/proyectos/${p.id}` });
+    const out: { key: string; label: string; meta: string; to: string; rank?: number }[] = [];
+    for (const p of db.projects) {
+      const n = norm(p.nombre);
+      if (n.includes(nt) || norm(p.descripcion).includes(nt))
+        out.push({ key: p.id, label: p.nombre, meta: `Proyecto · ${p.prioridadFinal}`, to: `/proyectos/${p.id}`, rank: n.startsWith(nt) ? 0 : n.includes(nt) ? 1 : 2 });
+    }
+    out.sort((a, b) => (a.rank ?? 3) - (b.rank ?? 3));
     for (const c of db.commitments)
       if (norm(c.accion).includes(nt)) out.push({ key: c.id, label: c.accion, meta: `Compromiso · ${db.projects.find((p) => p.id === c.projectId)?.nombre ?? ''}`, to: `/proyectos/${c.projectId}` });
     for (const b of db.blocks)

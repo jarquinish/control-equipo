@@ -216,7 +216,7 @@ test('flujo completo de dos semanas', async ({ page }, testInfo) => {
   await dialog(page).getByLabel('Nueva hora').fill('10:00');
   await dialog(page).getByLabel('Motivo').fill('Se espera validación legal');
   await dialog(page).getByRole('button', { name: 'Reprogramar' }).click();
-  await expect(r2).toContainText('Reprogramado ×1');
+  await expect(r2).toContainText('×1 reprogramaciones');
   // Escalar
   const r3 = page.getByTestId('review-card').filter({ hasText: 'Pedir agenda final' });
   await r3.getByRole('button', { name: 'Escalar' }).click();

@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { AlertTriangle, ArrowUpCircle, Check, CheckCircle2, RefreshCw, Scale, X, ArrowDownUp } from 'lucide-react';
 import { DEPENDENCY_LABELS, IMPACT_LABELS, URGENCY_LABELS } from '../../domain/constants';
-import { fmtDeadline } from '../../domain/dates';
+import { fmtDate, fmtDeadline } from '../../domain/dates';
 import { areaUpdateFor, commitmentDisplayStatus, isActiveProject, isOpenCommitment, personName, sortProjectsByPriority, type WeekData } from '../../domain/selectors';
 import { reviewCommitments } from '../../domain/weekly';
 import type { Level, Session } from '../../domain/types';
@@ -51,13 +51,13 @@ export function Step1Review({ session }: StepProps) {
                   {p && <PriorityBadge p={p.prioridadFinal} />}
                   <span className="review-project">{p?.nombre}</span>
                   <CommitmentStatusChip status={st} />
-                  {c.reprogramaciones > 0 && <span className="chip chip-yellow">Reprogramado ×{c.reprogramaciones}</span>}
+                  {c.reprogramaciones > 0 && <span className="chip chip-yellow">×{c.reprogramaciones} reprogramaciones</span>}
                 </div>
                 <p className="review-action">{c.accion}</p>
                 <p className="small muted">
                   {personName(db.people, c.responsable)}
                   {c.apoyo && ` · apoyo: ${c.apoyo}`} · {fmtDeadline(c.fecha, c.hora, now)}
-                  {(c.fecha !== c.fechaOriginal || c.hora !== c.horaOriginal) && ` · original ${c.fechaOriginal} ${c.horaOriginal}`}
+                  {(c.fecha !== c.fechaOriginal || c.hora !== c.horaOriginal) && ` · original ${fmtDate(c.fechaOriginal)} ${c.horaOriginal}`}
                 </p>
               </div>
               {isOpenCommitment(c) ? (

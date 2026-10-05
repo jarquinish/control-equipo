@@ -254,3 +254,21 @@ describe('importar / exportar', () => {
     expect(commitmentsCsv(store.getState(), new Date(2026, 9, 5)).split('\r\n')[1]).toContain('Ana Gerente');
   });
 });
+
+describe('métricas de cumplimiento', async () => {
+  const { complianceRate } = await import('../../src/domain/metrics');
+  it('sólo evalúa compromisos cumplidos, incumplidos o vencidos en la ventana', async () => {
+    const { svc, store, areas, ana, clock } = await setup(new Date(2026, 9, 5, 9, 0));
+    const p = svc.projects.create({ nombre: 'X', areaId: areas['Diseño'], impacto: 2, urgencia: 2, dependencia: 2 });
+    const mk = (fecha: string, hora: string) => svc.commitments.create({ projectId: p.id, accion: `A ${fecha}`, responsable: ana.id, fecha, hora });
+    const a = mk('2026-10-05', '10:00');
+    const b = mk('2026-10-05', '11:00');
+    mk('2026-10-05', '12:00'); // vencerá
+    mk('2026-10-09', '12:00'); // futuro: no cuenta
+    clock.now = new Date(2026, 9, 5, 13, 0);
+    svc.commitments.complete(a.id);
+    svc.commitments.fail(b.id);
+    const r = complianceRate(store.getState().commitments, clock.now, new Date(2026, 9, 1), clock.now);
+    expect(r).toMatchObject({ cumplidos: 1, incumplidos: 1, vencidos: 1, evaluables: 3, rate: 33 });
+  });
+});

@@ -588,6 +588,7 @@
 
 /* ───────── Kanban bloqueos ───────── */
 .kanban {
+  position: relative;
   display: grid;
   grid-template-columns: repeat(4, minmax(240px, 1fr));
   gap: 14px;
@@ -823,11 +824,12 @@
 }
 .area-kpis {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 6px;
 }
 .area-kpis dt {
-  font-size: 10.5px;
+  overflow-wrap: anywhere;
+  font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--text-3);
@@ -1030,9 +1032,11 @@
 
 /* Modo Junta: optimizado para proyectar (1920×1080, 1440×900, laptop, tablet horizontal) */
 .meeting {
-  min-height: 100vh;
+  height: 100vh;
+  height: 100dvh;
   display: grid;
   grid-template-rows: auto auto 1fr auto;
+  grid-template-columns: minmax(0, 1fr);
   background: var(--brand-25);
   font-size: clamp(15px, 0.55vw + 8px, 19px);
 }
@@ -1094,6 +1098,7 @@
   color: #fff;
 }
 .step-pills {
+  position: relative;
   display: flex;
   gap: 6px;
   padding: 10px 28px;
@@ -1158,7 +1163,12 @@
 }
 .step {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 16px;
+}
+.step > *,
+.detect-main > * {
+  min-width: 0;
 }
 .step-lead {
   font-size: 1.05em;
@@ -1601,11 +1611,15 @@
 }
 
 /* ───────── Configuración ───────── */
+.settings-fieldset > * {
+  min-width: 0;
+}
 .settings-fieldset {
   border: 0;
   padding: 0;
   margin: 0;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 20px;
   min-width: 0;
 }
@@ -1694,7 +1708,7 @@
     grid-template-columns: 1fr;
   }
   .detect {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
   .detect-queue {
     position: static;
@@ -1780,4 +1794,15 @@
 .evolution li.evo-live {
   background: #fff;
   border: 1px dashed var(--line);
+}
+@media (max-width: 720px) {
+  .meeting-foot .btn {
+    flex: 1 1 0;
+    min-width: 0;
+    white-space: normal;
+    text-align: center;
+  }
+  .meeting-foot > span {
+    display: none;
+  }
 }
