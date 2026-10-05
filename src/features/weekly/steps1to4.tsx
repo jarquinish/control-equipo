@@ -173,7 +173,16 @@ export function Step4Prioritize({ session, data }: StepProps) {
   const rows = [...order.map((id) => active.find((p) => p.id === id)).filter((p): p is NonNullable<typeof p> => !!p), ...active.filter((p) => !order.includes(p.id))];
   const counts = { P1: active.filter((p) => p.prioridadFinal === 'P1').length, P2: active.filter((p) => p.prioridadFinal === 'P2').length, P3: active.filter((p) => p.prioridadFinal === 'P3').length };
 
-  const setLevel = (id: string, field: 'impacto' | 'urgencia' | 'dependencia', v: Level) => run(() => services.projects.update(id, { [field]: v }, { origen: 'junta' }));
+  const kickoff = session.tipo === 'arranque';
+  const pondered = new Set(session.ponderados ?? []);
+  const setLevel = (id: string, field: 'impacto' | 'urgencia' | 'dependencia', v: Level) =>
+    run(() =>
+      services.ctx.store.batch(() => {
+        services.projects.update(id, { [field]: v }, { origen: 'junta' });
+        if (kickoff) services.sessions.markPondered(session.id, id);
+      }),
+    );
+  const pending = active.filter((p) => !pondered.has(p.id));
 
   return (
     <div className="step">
@@ -188,6 +197,18 @@ export function Step4Prioritize({ session, data }: StepProps) {
           <ArrowDownUp size={15} aria-hidden /> Reordenar por score
         </button>
       </div>
+      {kickoff && active.length > 0 && (
+        <p className={`alert ${pending.length ? 'alert-yellow' : 'alert-green'}`} data-testid="ponder-status">
+          {pending.length
+            ? `Revisa impacto, urgencia y dependencia de cada proyecto y confirma su ponderación (${active.length - pending.length} de ${active.length} confirmados).`
+            : `✓ Los ${active.length} proyectos tienen su ponderación confirmada.`}
+          {pending.length > 1 && (
+            <button className="btn btn-sm btn-secondary ml-auto" onClick={() => run(() => services.ctx.store.batch(() => pending.forEach((p) => services.sessions.markPondered(session.id, p.id))))}>
+              Confirmar todos
+            </button>
+          )}
+        </p>
+      )}
       {counts.P1 > settings.criteria.maxP1 && (
         <p className="alert alert-yellow big">
           <AlertTriangle size={20} aria-hidden /> No todo puede ser P1: hay {counts.P1} (recomendado ≤ {settings.criteria.maxP1}). ¿Qué prioridad desplaza?
@@ -204,6 +225,7 @@ export function Step4Prioritize({ session, data }: StepProps) {
               <th scope="col" className="num">Score</th>
               <th scope="col">Calculada</th>
               <th scope="col">Final</th>
+              {kickoff && <th scope="col">Ponderación</th>}
             </tr>
           </thead>
           <tbody>
@@ -237,6 +259,19 @@ export function Step4Prioritize({ session, data }: StepProps) {
                       <PriorityBadge p={p.prioridadFinal} override={p.ajusteDireccion} /> <Scale size={14} aria-hidden />
                     </button>
                   </td>
+                  {kickoff && (
+                    <td>
+                      {pondered.has(p.id) ? (
+                        <span className="chip chip-green">
+                          <CheckCircle2 size={14} aria-hidden /> Confirmada
+                        </span>
+                      ) : (
+                        <button className="btn btn-sm btn-ok" onClick={() => run(() => services.sessions.markPondered(session.id, p.id))} aria-label={`Confirmar ponderación de ${p.nombre}`}>
+                          <Check size={14} aria-hidden /> Confirmar
+                        </button>
+                      )}
+                    </td>
+                  )}
                 </tr>
               );
             })}

@@ -31,18 +31,18 @@ const OUTCOME_LABEL: Record<DetectOutcome, string> = { avanza: 'Avanza', bloquea
 const OUTCOME_TONE = { avanza: 'green', bloqueado: 'red', decision: 'blue', resuelto: 'green' } as const;
 
 /* ───────── PASO 5 · DETECTAR ───────── */
-export function Step5Detect({ session, data }: StepProps) {
+export function Step5Detect({ session, data, includeAllP3 }: StepProps & { includeAllP3?: boolean }) {
   const db = useDb();
   const { now } = useApp();
   const services = useServices();
   const modals = useModals();
   const { run } = useFeedback();
-  const queue = detectQueue(data, now);
+  const queue = detectQueue(data, now, { includeAllP3 });
   const firstPending = queue.findIndex((p) => !session.deteccion[p.id]);
   const [idx, setIdx] = useState(firstPending === -1 ? 0 : firstPending);
 
   if (queue.length === 0) {
-    return <EmptyState icon={<CheckCircle2 size={40} />} title="Sin proyectos P1/P2 activos para revisar" />;
+    return <EmptyState icon={<CheckCircle2 size={40} />} title={includeAllP3 ? 'Esta área no tiene proyectos activos para revisar' : 'Sin proyectos P1/P2 activos para revisar'} />;
   }
   const i = Math.min(idx, queue.length - 1);
   const p = queue[i];
@@ -255,6 +255,7 @@ export function Step6Unblock({ session, data }: StepProps) {
 
 /* ───────── PASO 7 · CERRAR ───────── */
 export function Step7Close({ session, data }: StepProps) {
+  const label = session.tipo === 'arranque' ? 'Cerrar Sesión 1' : 'Cerrar Weekly';
   const db = useDb();
   const { now } = useApp();
   const services = useServices();
@@ -286,9 +287,9 @@ export function Step7Close({ session, data }: StepProps) {
       if (!ok) return;
     } else {
       const ok = await confirm({
-        title: 'Cerrar Weekly',
+        title: label,
         message: 'Se guardará la fotografía de la semana (prioridades, bloqueos, compromisos y decisiones) y se generará el resumen ejecutivo.',
-        confirmLabel: 'Cerrar Weekly',
+        confirmLabel: label,
       });
       if (!ok) return;
     }
@@ -433,7 +434,7 @@ export function Step7Close({ session, data }: StepProps) {
           Vista previa del resumen
         </button>
         <button className="btn btn-primary btn-xl" onClick={close} data-testid="close-weekly">
-          <CheckCircle2 size={22} aria-hidden /> Cerrar Weekly
+          <CheckCircle2 size={22} aria-hidden /> {label}
         </button>
       </div>
     </div>

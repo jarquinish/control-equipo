@@ -2,7 +2,7 @@ import { newId } from '../data/ids';
 import { toISODate } from '../domain/dates';
 import { getWeekData } from '../domain/selectors';
 import { buildSummary, type SummaryOutput } from '../domain/summary';
-import type { Decision, DetectOutcome, Session, WeekSnapshot } from '../domain/types';
+import type { Decision, DetectOutcome, Session, SessionType, WeekSnapshot } from '../domain/types';
 import { assertValid, ValidationError } from '../domain/validation';
 import type { ServiceContext } from './context';
 import { recordWeeklyUpdate } from './projectService';
@@ -10,7 +10,7 @@ import { blockService } from './blockService';
 import { weekService } from './weekService';
 
 export function sessionService(ctx: ServiceContext) {
-  const { sessions, decisions } = ctx.repos;
+  const { sessions, decisions, areaUpdates } = ctx.repos;
   const blocks = blockService(ctx);
   const weeksSvc = weekService(ctx);
 
@@ -31,8 +31,11 @@ export function sessionService(ctx: ServiceContext) {
     get,
     forWeek,
 
-    /** INICIAR WEEKLY: crea la sesión de la semana activa o retoma la que esté en curso. */
-    start(): Session {
+    /**
+     * INICIAR WEEKLY: crea la sesión de la semana activa o retoma la que esté en curso.
+     * `arranque` = Sesión 1 (metodología → proyectos por área → pasos 3–7 por área → cierre).
+     */
+    start(tipo: SessionType = 'regular'): Session {
       const week = ctx.activeWeek();
       if (!week) throw new ValidationError({ semana: 'No hay una semana activa.' });
       if (week.estado === 'cerrada')
@@ -40,12 +43,15 @@ export function sessionService(ctx: ServiceContext) {
       const existing = forWeek(week.id);
       if (existing && existing.estado === 'en_curso') return existing;
       const at = ctx.nowIso();
+      const kickoff = tipo === 'arranque';
       return sessions.create({
+        tipo,
+        ...(kickoff ? { etapa: 'metodologia', ponderados: [], areasCerradas: [] } : {}),
         id: newId('ses'),
         weekId: week.id,
         fecha: toISODate(ctx.now()),
         estado: 'en_curso',
-        pasoActual: 1,
+        pasoActual: kickoff ? 3 : 1,
         proyectosRevisados: [],
         decisiones: [],
         compromisos: [],
@@ -53,6 +59,46 @@ export function sessionService(ctx: ServiceContext) {
         desplazamientos: [],
         createdAt: at,
       });
+    },
+
+    /** Sesión de arranque: mueve la etapa actual (clave de domain/kickoff.ts). */
+    setStage(id: string, etapa: string) {
+      const paso = Number(etapa.split(':')[1]);
+      return patch(id, { etapa, ...(paso ? { pasoActual: paso } : {}) });
+    },
+
+    /** Confirma que la ponderación de un proyecto fue revisada en la sesión. */
+    markPondered(id: string, projectId: string) {
+      const s = get(id);
+      const list = s.ponderados ?? [];
+      if (list.includes(projectId)) return s;
+      return patch(id, { ponderados: [...list, projectId] });
+    },
+
+    /** Sesión de arranque: el área terminó sus pasos 3–7 (queda registrada su actualización semanal). */
+    closeArea(id: string, areaId: string, nota?: string) {
+      return ctx.store.batch(() => {
+        const s = get(id);
+        const list = s.areasCerradas ?? [];
+        const week = ctx.activeWeek();
+        if (week?.estado === 'abierta') {
+          areaUpdates.upsert({
+            id: `au_${week.id}_${areaId}`,
+            weekId: week.id,
+            areaId,
+            completedAt: ctx.nowIso(),
+            completedBy: ctx.userId(),
+            comentario: nota ?? 'Sesión 1 · arranque',
+          });
+        }
+        return patch(id, { areasCerradas: list.includes(areaId) ? list : [...list, areaId] });
+      });
+    },
+
+    /** Número consecutivo de la sesión (Sesión 1, 2, 3…). */
+    number(id: string): number {
+      const all = [...sessions.list()].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+      return all.findIndex((x) => x.id === id) + 1;
     },
 
     setStep(id: string, paso: number) {

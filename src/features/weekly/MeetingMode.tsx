@@ -9,6 +9,7 @@ import { navigate } from '../../state/router';
 import { EmptyState } from '../../ui/common';
 import { Step1Review, Step2Visibilize, Step3Order, Step4Prioritize } from './steps1to4';
 import { Step5Detect, Step6Unblock, Step7Close } from './steps5to7';
+import { KickoffFrame } from './KickoffMode';
 
 export function MeetingMode() {
   const db = useDb();
@@ -29,7 +30,9 @@ export function MeetingMode() {
       </div>
     );
   }
-  return <MeetingFrame session={session} weekNumber={week.numero} range={`${fmtShort(week.fechaInicio)} — ${fmtDate(week.fechaFin)}`} data={data} />;
+  const range = `${fmtShort(week.fechaInicio)} — ${fmtDate(week.fechaFin)}`;
+  if (session.tipo === 'arranque') return <KickoffFrame session={session} weekNumber={week.numero} range={range} data={data} />;
+  return <MeetingFrame session={session} weekNumber={week.numero} range={range} data={data} />;
 }
 
 function MeetingFrame({ session, weekNumber, range, data }: { session: Session; weekNumber: number; range: string; data: NonNullable<ReturnType<typeof getWeekData>> }) {

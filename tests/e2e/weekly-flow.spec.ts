@@ -65,7 +65,9 @@ test('flujo completo de dos semanas', async ({ page }, testInfo) => {
   await expect(page.locator('.kpi', { hasText: 'Proyectos activos' })).toContainText('5');
   await expect(page.locator('.kpi', { hasText: 'Bloqueados' })).toContainText('1');
 
-  // ── Dirección inicia la Weekly
+  // ── Dirección inicia la Weekly (regular; la Sesión 1 de arranque tiene su propia prueba)
+  await expect(page.getByTestId('start-kickoff')).toBeVisible();
+  await page.goto('/weekly');
   await page.getByTestId('start-weekly').click();
   await expect(page.getByTestId('meeting-mode')).toBeVisible();
   await expect(page.getByTestId('step-count')).toHaveText('PASO 1 DE 7');

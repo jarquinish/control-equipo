@@ -25,8 +25,9 @@ export function WeeklyPage() {
   const blocked = data.projects.filter((p) => isActiveProject(p) && p.bloqueado);
   const unmanaged = data.blocks.filter((b) => isBlockOpen(b) && !blockIsManaged(b, data.commitments));
 
-  const start = () => {
-    const s = run(() => services.sessions.start());
+  const firstTime = !db.sessions.some((s) => s.estado === 'cerrada');
+  const start = (tipo: 'regular' | 'arranque' = 'regular') => {
+    const s = run(() => services.sessions.start(tipo));
     if (s) navigate('/weekly/junta');
   };
   const openNext = async () => {
@@ -63,23 +64,49 @@ export function WeeklyPage() {
           <>
             <PlayCircle size={40} className="text-brand" aria-hidden />
             <div>
-              <h2>Weekly en curso</h2>
-              <p className="muted">Iniciada {fmtDateTime(session.createdAt)} · Paso {session.pasoActual} de 7: {WEEKLY_STEPS[session.pasoActual - 1].titulo}</p>
+              <h2>{session.tipo === 'arranque' ? 'Sesión 1 · Arranque en curso' : 'Weekly en curso'}</h2>
+              <p className="muted">
+                Iniciada {fmtDateTime(session.createdAt)}
+                {session.tipo !== 'arranque' && ` · Paso ${session.pasoActual} de 7: ${WEEKLY_STEPS[session.pasoActual - 1].titulo}`}
+                {session.tipo === 'arranque' && ` · ${(session.areasCerradas ?? []).length} de ${areas.length} áreas cerradas`}
+              </p>
             </div>
             <button className="btn btn-primary btn-xl" onClick={() => navigate('/weekly/junta')}>
-              <PlayCircle size={22} aria-hidden /> Continuar Weekly
+              <PlayCircle size={22} aria-hidden /> {session.tipo === 'arranque' ? 'Continuar Sesión 1' : 'Continuar Weekly'}
             </button>
           </>
         ) : (
           <>
             <CalendarCheck2 size={40} className="text-brand" aria-hidden />
             <div>
-              <h2>¿Listos para la Weekly?</h2>
-              <p className="muted">Conduce la junta paso a paso. Funciona proyectado en pantalla completa.</p>
+              <h2>{firstTime ? 'Sesión 1 · Arranque' : '¿Listos para la Weekly?'}</h2>
+              <p className="muted">
+                {firstTime
+                  ? 'Primera sesión: explicamos la metodología, enlistamos los proyectos de cada área y recorremos área por área los pasos 3 a 7.'
+                  : 'Conduce la junta paso a paso. Funciona proyectado en pantalla completa.'}
+              </p>
             </div>
-            <button className="btn btn-primary btn-xl" onClick={start} data-testid="start-weekly">
-              <PlayCircle size={22} aria-hidden /> Iniciar Weekly
-            </button>
+            <div className="launch-actions">
+              {firstTime ? (
+                <>
+                  <button className="btn btn-primary btn-xl" onClick={() => start('arranque')} data-testid="start-kickoff">
+                    <PlayCircle size={22} aria-hidden /> Iniciar Sesión 1
+                  </button>
+                  <button className="btn btn-ghost btn-sm" onClick={() => start('regular')} data-testid="start-weekly">
+                    o iniciar Weekly regular
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button className="btn btn-primary btn-xl" onClick={() => start('regular')} data-testid="start-weekly">
+                    <PlayCircle size={22} aria-hidden /> Iniciar Weekly
+                  </button>
+                  <button className="btn btn-ghost btn-sm" onClick={() => start('arranque')} data-testid="start-kickoff">
+                    o sesión de arranque (metodología + proyectos por área)
+                  </button>
+                </>
+              )}
+            </div>
           </>
         )}
       </div>

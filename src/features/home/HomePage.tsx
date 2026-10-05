@@ -52,8 +52,9 @@ export function HomePage() {
   const myArea = user?.areaId ?? areas[0]?.id;
   const noProjects = db.projects.length === 0;
 
-  const startWeekly = () => {
-    const s = run(() => services.sessions.start());
+  const firstTime = !db.sessions.some((x) => x.estado === 'cerrada');
+  const startWeekly = (tipo: 'regular' | 'arranque' = 'regular') => {
+    const s = run(() => services.sessions.start(tipo));
     if (s) navigate('/weekly/junta');
   };
 
@@ -63,10 +64,14 @@ export function HomePage() {
     </button>
   ) : !data.live ? null : session?.estado === 'en_curso' ? (
     <button className="btn btn-xl btn-primary" onClick={() => navigate('/weekly/junta')}>
-      <PlayCircle size={22} aria-hidden /> Continuar Weekly · Paso {session.pasoActual}
+      <PlayCircle size={22} aria-hidden /> {session.tipo === 'arranque' ? 'Continuar Sesión 1' : `Continuar Weekly · Paso ${session.pasoActual}`}
+    </button>
+  ) : firstTime ? (
+    <button className="btn btn-xl btn-primary" onClick={() => startWeekly('arranque')} data-testid="start-kickoff">
+      <PlayCircle size={22} aria-hidden /> Iniciar Sesión 1
     </button>
   ) : (
-    <button className="btn btn-xl btn-primary" onClick={startWeekly} data-testid="start-weekly">
+    <button className="btn btn-xl btn-primary" onClick={() => startWeekly('regular')} data-testid="start-weekly">
       <PlayCircle size={22} aria-hidden /> Iniciar Weekly
     </button>
   );

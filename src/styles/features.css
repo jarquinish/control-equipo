@@ -1806,3 +1806,229 @@
     display: none;
   }
 }
+
+/* ───────── Sesión 1 · Arranque ───────── */
+.launch-actions {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+}
+.substeps {
+  position: relative;
+  display: flex;
+  gap: 6px;
+  padding: 8px 28px;
+  background: var(--brand-25);
+  border-bottom: 1px solid var(--line);
+  overflow-x: auto;
+}
+.substep {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--line);
+  background: #fff;
+  padding: 5px 12px 5px 5px;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 0.82em;
+  cursor: pointer;
+  white-space: nowrap;
+  color: var(--text-2);
+}
+.substep .step-n {
+  background: var(--gray-bg);
+  color: var(--gray-fg);
+  width: 22px;
+  height: 22px;
+  font-size: 12px;
+}
+.substep.past .step-n {
+  background: var(--lime);
+  color: #fff;
+}
+.substep.on {
+  border-color: var(--brand);
+  color: var(--brand-800);
+  background: var(--brand-50);
+}
+.substep.on .step-n {
+  background: var(--brand);
+  color: #fff;
+}
+
+.method {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+}
+.method-objective,
+.method-agenda {
+  padding: 20px 24px;
+  display: grid;
+  gap: 8px;
+}
+.method-objective p {
+  font-size: 1.15em;
+  max-width: 75ch;
+  margin: 0;
+}
+.method-cycle {
+  font-size: 0.85em !important;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--brand);
+}
+.method-agenda ol {
+  padding-left: 22px;
+  display: grid;
+  gap: 4px;
+}
+.method-steps {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+}
+.method-step {
+  padding: 16px;
+  display: grid;
+  gap: 10px;
+  align-content: start;
+}
+.method-step header {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+.method-step h3 {
+  font-size: 1.05em;
+}
+.method-q {
+  margin: 2px 0 0;
+  color: var(--brand-800);
+  font-weight: 600;
+  font-size: 0.92em;
+}
+.method-step dl {
+  display: grid;
+  gap: 2px;
+  font-size: 0.9em;
+}
+.method-step dt {
+  font-size: 0.72em;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-3);
+  font-weight: 700;
+  margin-top: 4px;
+}
+.method-today {
+  margin: 0;
+  font-size: 0.85em;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: var(--warn-bg);
+  color: var(--warn-fg);
+}
+.method-step.muted-step {
+  background: var(--brand-25);
+}
+.method-two {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 16px;
+}
+.method-two > * {
+  min-width: 0;
+}
+
+.capture-form {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  padding: 16px;
+}
+.capture-form .grow {
+  flex: 2 1 280px;
+}
+.capture-person {
+  flex: 1 1 220px;
+}
+.input-lg {
+  min-height: 48px;
+  font-size: 1.05em;
+}
+.capture-error {
+  flex-basis: 100%;
+}
+.capture-list {
+  list-style: none;
+  display: grid;
+  gap: 8px;
+  counter-reset: cap;
+}
+.capture-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  counter-increment: cap;
+}
+.capture-n::before {
+  content: counter(cap);
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--brand-50);
+  color: var(--brand-800);
+  font-weight: 750;
+}
+.capture-main {
+  flex: 1;
+  display: grid;
+  min-width: 0;
+}
+.capture-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.capture-sum {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: #fff;
+}
+.capture-sum.ok {
+  border-color: var(--ok-bd);
+  background: var(--ok-bg);
+}
+.capture-sum.warn {
+  border-color: var(--warn-bd);
+  background: var(--warn-bg);
+}
+kbd {
+  font-family: inherit;
+  font-size: 0.85em;
+  padding: 1px 6px;
+  border: 1px solid var(--line);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  background: #fff;
+}
+@media (max-width: 720px) {
+  .substeps {
+    padding: 8px 16px;
+  }
+}
+.area-tab.on .count-pill {
+  background: rgba(255, 255, 255, 0.22);
+  border-color: transparent;
+  color: #fff;
+}

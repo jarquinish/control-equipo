@@ -27,6 +27,7 @@ export type BlockStatus = 'por_destrabar' | 'en_gestion' | 'resuelto' | 'escalad
 export type CommitmentStatus = 'pendiente' | 'en_gestion' | 'cumplido' | 'reprogramado' | 'incumplido' | 'escalado';
 export type CommitmentDisplayStatus = CommitmentStatus | 'vencido';
 export type SessionStatus = 'en_curso' | 'cerrada';
+export type SessionType = 'regular' | 'arranque';
 export type DetectOutcome = 'avanza' | 'bloqueado' | 'decision' | 'resuelto';
 export type UpdateOrigin = 'area' | 'junta' | 'cierre';
 
@@ -198,6 +199,14 @@ export interface Session {
   resumen?: string;
   createdAt: ISODateTime;
   closedAt?: ISODateTime;
+  /** `arranque` = Sesión 1: metodología → proyectos por área → pasos 3–7 por área → cierre. */
+  tipo?: SessionType;
+  /** Etapa actual de la sesión de arranque (ver domain/kickoff.ts). */
+  etapa?: string;
+  /** Proyectos cuya ponderación se confirmó en la sesión. */
+  ponderados?: ID[];
+  /** Áreas que ya cerraron sus pasos 3–7 en la sesión de arranque. */
+  areasCerradas?: ID[];
 }
 
 export interface Decision {
