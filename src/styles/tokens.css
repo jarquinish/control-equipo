@@ -1,0 +1,64 @@
+/* Identidad visual SOC · tokens de diseño */
+:root {
+  /* Marca */
+  --brand: #006d4e;
+  --brand-700: #00563d;
+  --brand-800: #00402e;
+  --brand-50: #eef6f2;
+  --brand-25: #f5faf8;
+  --brand-100: #d7ebe3;
+
+  /* Acentos (con moderación) */
+  --coral: #f4614a;
+  --sky: #3bbfda;
+  --lime: #5dc65e;
+  --pink: #e84e8a;
+
+  /* Semáforos accesibles: fondo suave + texto oscuro (no depender sólo del color) */
+  --ok-bg: #e5f5e5;
+  --ok-fg: #1f6b2a;
+  --ok-bd: #b7e2b8;
+  --warn-bg: #fff4d4;
+  --warn-fg: #7a5600;
+  --warn-bd: #f3d98a;
+  --bad-bg: #fde9e5;
+  --bad-fg: #a8321d;
+  --bad-bd: #f6c0b5;
+  --info-bg: #e3f5fa;
+  --info-fg: #0b6178;
+  --info-bd: #b2e3ef;
+  --pink-bg: #fce6ef;
+  --pink-fg: #a3204f;
+  --pink-bd: #f3bdd2;
+  --gray-bg: #eef1f0;
+  --gray-fg: #4a5753;
+  --gray-bd: #d7dedb;
+
+  /* Neutros */
+  --bg: #f6f8f7;
+  --surface: #ffffff;
+  --text: #13261f;
+  --text-2: #4c5c56;
+  --text-3: #74827d;
+  --line: #e2e8e5;
+  --line-2: #eef2f0;
+
+  --radius-sm: 8px;
+  --radius: 12px;
+  --radius-lg: 16px;
+  --shadow-sm: 0 1px 2px rgba(16, 40, 31, 0.05);
+  --shadow: 0 1px 2px rgba(16, 40, 31, 0.04), 0 4px 16px rgba(16, 40, 31, 0.05);
+  --shadow-lg: 0 12px 40px rgba(16, 40, 31, 0.16);
+  --focus: 0 0 0 3px rgba(59, 191, 218, 0.55);
+
+  --font: 'DM Sans Variable', 'DM Sans', 'Circular', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --sidebar-w: 248px;
+  --topbar-h: 64px;
+
+  --p1: #a8321d;
+  --p1-bg: #fde9e5;
+  --p2: #7a5600;
+  --p2-bg: #fff4d4;
+  --p3: #0b6178;
+  --p3-bg: #e3f5fa;
+}

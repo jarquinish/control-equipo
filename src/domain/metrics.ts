@@ -1,13 +1,54 @@
-import { inWeek, isActiveProject, isBlockOpen, isOpenCommitment, isOverdue, sortWeeks, type WeekData } from './selectors';
-import type { DbData, KpiSet, Week } from './types';
+import { deadline, isValidDate, isValidTime } from './dates';
+import { inWeek, isActiveProject, isBlockOpen, isOpenCommitment, isOverdue, sortWeeks, weekEnd, weekStart, type WeekData } from './selectors';
+import type { Commitment, DbData, KpiSet, Week } from './types';
 
-export function computeKpis(data: Pick<WeekData, 'projects' | 'blocks' | 'commitments' | 'week'>, now: Date): KpiSet {
+export interface Compliance {
+  cumplidos: number;
+  incumplidos: number;
+  vencidos: number;
+  evaluables: number;
+  /** 0–100 o null si no hay compromisos evaluables. */
+  rate: number | null;
+}
+
+const DAY = 86_400_000;
+
+/**
+ * Cumplimiento de compromisos en una ventana: considera los compromisos cuya
+ * fecha/hora ORIGINAL cae en [from, to] (o que se cerraron en ella) y que ya son
+ * evaluables: cumplidos, incumplidos o vencidos. Un compromiso reprogramado que
+ * aún no vence no cuenta todavía.
+ */
+export function complianceRate(commitments: Commitment[], now: Date, from: Date, to: Date): Compliance {
+  const inRange = (t: number) => t >= from.getTime() && t <= to.getTime();
+  const set = commitments.filter((c) => {
+    const orig = isValidDate(c.fechaOriginal) && isValidTime(c.horaOriginal) ? deadline(c.fechaOriginal, c.horaOriginal).getTime() : NaN;
+    return inRange(orig) || (!!c.completedAt && inRange(new Date(c.completedAt).getTime()));
+  });
+  const cumplidos = set.filter((c) => c.estado === 'cumplido').length;
+  const incumplidos = set.filter((c) => c.estado === 'incumplido').length;
+  const vencidos = set.filter((c) => isOverdue(c, now)).length;
+  const evaluables = cumplidos + incumplidos + vencidos;
+  return { cumplidos, incumplidos, vencidos, evaluables, rate: evaluables ? Math.round((cumplidos / evaluables) * 100) : null };
+}
+
+/** Cumplimiento de los compromisos que vencían (originalmente) en esa semana. */
+export function weekCompliance(commitments: Commitment[], week: Week, now: Date): Compliance {
+  const end = new Date(Math.min(weekEnd(week).getTime() - 1, now.getTime()));
+  return complianceRate(commitments, now, weekStart(week), end);
+}
+
+/**
+ * KPIs de una semana. El cumplimiento es móvil: últimas 4 semanas hasta `now`
+ * (para no marcar 0 % un lunes por la mañana). `allCommitments` permite incluir
+ * compromisos ya cerrados en semanas anteriores.
+ */
+export function computeKpis(data: Pick<WeekData, 'projects' | 'blocks' | 'commitments' | 'week'>, now: Date, allCommitments?: Commitment[]): KpiSet {
   const active = data.projects.filter(isActiveProject);
   const open = data.commitments.filter(isOpenCommitment);
   const vencidos = open.filter((c) => isOverdue(c, now)).length;
-  const cumplidos = data.commitments.filter((c) => c.estado === 'cumplido').length;
-  const incumplidos = data.commitments.filter((c) => c.estado === 'incumplido').length;
-  const evaluables = cumplidos + incumplidos + vencidos;
+  const comp = complianceRate(allCommitments ?? data.commitments, now, new Date(now.getTime() - 28 * DAY), now);
+  const { cumplidos, incumplidos } = comp;
   const reprogramaciones = data.commitments.reduce(
     (n, c) => n + c.historial.filter((e) => e.tipo === 'reprogramado' && inWeek(e.fecha, data.week)).length,
     0,
@@ -22,7 +63,8 @@ export function computeKpis(data: Pick<WeekData, 'projects' | 'blocks' | 'commit
     vencidos,
     cumplidos,
     incumplidos,
-    cumplimiento: evaluables === 0 ? null : Math.round((cumplidos / evaluables) * 100),
+    cumplimiento: comp.rate,
+    evaluables: comp.evaluables,
     reprogramaciones,
     escalados:
       open.filter((c) => c.estado === 'escalado').length + data.blocks.filter((b) => b.estado === 'escalado').length,

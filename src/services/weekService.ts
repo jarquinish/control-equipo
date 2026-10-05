@@ -69,7 +69,7 @@ export function weekService(ctx: ServiceContext) {
         commitments: data.commitments,
         decisions: data.decisions,
         areaUpdates: data.areaUpdates,
-        kpis: computeKpis(data, now),
+        kpis: computeKpis(data, now, ctx.repos.commitments.list()),
         resumen: summary.markdown,
       });
       ctx.repos.snapshots.create(snapshot);

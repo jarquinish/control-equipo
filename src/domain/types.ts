@@ -222,6 +222,8 @@ export interface KpiSet {
   incumplidos: number;
   /** 0–100 o null si no hay compromisos evaluables. */
   cumplimiento: number | null;
+  /** Compromisos evaluables considerados en el cumplimiento. */
+  evaluables?: number;
   reprogramaciones: number;
   escalados: number;
   p1Bloqueados: number;

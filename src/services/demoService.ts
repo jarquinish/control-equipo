@@ -74,13 +74,13 @@ export function buildDemoData(now: Date = new Date()): DbData {
   const pr = {
     queEsSoc: proj({ nombre: 'Campaña «¿Qué es SOC?» · Fase Conversación', descripcion: 'Carruseles, reels y copy de la fase de conversación con Líderes y prospectos.', areaId: A.contenido, responsable: P.laura, fechaObjetivo: fin(18), i: 3, u: 3, d: 2, dependeDe: A.diseno }),
     socTv: proj({ nombre: 'SOC TV · Temporada 2', descripcion: 'Guiones, calendario de grabación y temas de la temporada 2.', areaId: A.contenido, responsable: P.diego, fechaObjetivo: fin(45), i: 3, u: 2, d: 2, eisenhower: 'planificar' }),
-    momentoVida: proj({ nombre: 'Contenido «Momento de Vida» para redes', descripcion: 'Serie de piezas por producto bajo el sistema visual Momento de Vida.', areaId: A.contenido, responsable: P.diego, fechaObjetivo: fin(25), i: 2, u: 2, d: 1 }),
+    momentoVida: proj({ nombre: 'Contenido «Momento de Vida» para redes', descripcion: 'Serie de piezas por producto bajo el sistema visual Momento de Vida.', areaId: A.contenido, responsable: P.diego, fechaObjetivo: fin(25), i: 2, u: 2, d: 1, eisenhower: 'planificar' }),
     guiaMensajes: proj({ nombre: 'Guía de mensajes por audiencia (Líderes)', descripcion: 'Matriz de mensajes por audiencia y etapa del viaje para Líderes.', areaId: A.contenido, responsable: P.laura, fechaObjetivo: fin(35), i: 3, u: 1, d: 2 }),
     boletin: proj({ nombre: 'Boletín interno Red de Oficinas', descripcion: 'Boletín quincenal con novedades de marca para oficinas.', areaId: A.contenido, responsable: P.diego, i: 1, u: 2, d: 1 }),
 
     kvConvencion: proj({ nombre: 'Key visual Convención Anual', descripcion: 'Concepto gráfico, KV y adaptaciones para la Convención.', areaId: A.diseno, responsable: P.andrea, fechaObjetivo: fin(10), i: 3, u: 3, d: 3, dependeDe: 'ext:Comercial' }),
     kitMarca: proj({ nombre: 'Kit de alineación de marca para oficinas', descripcion: 'Lineamientos, fachadas y señalética para alinear la marca en oficinas.', areaId: A.diseno, responsable: P.ivan, fechaObjetivo: fin(60), i: 3, u: 2, d: 3, eisenhower: 'planificar', dependeDe: 'ext:Red de Oficinas' }),
-    plantillas: proj({ nombre: 'Plantillas Plataforma de Marketing', descripcion: 'Plantillas editables para que la Red genere piezas locales.', areaId: A.diseno, responsable: P.andrea, fechaObjetivo: fin(30), i: 2, u: 2, d: 2 }),
+    plantillas: proj({ nombre: 'Plantillas Plataforma de Marketing', descripcion: 'Plantillas editables para que la Red genere piezas locales.', areaId: A.diseno, responsable: P.andrea, fechaObjetivo: fin(30), i: 2, u: 2, d: 2, eisenhower: 'planificar' }),
     presentaciones: proj({ nombre: 'Rediseño de presentaciones comerciales', descripcion: 'Nueva plantilla de presentación comercial alineada al brandbook.', areaId: A.diseno, responsable: P.ivan, fechaObjetivo: fin(50), i: 2, u: 1, d: 2 }),
 
     convencion: proj({ nombre: 'Campaña Convención', descripcion: 'Pauta digital, landing de registro y difusión de la Convención Anual.', areaId: A.mkt, responsable: P.carlos, fechaObjetivo: fin(12), i: 3, u: 3, d: 3, dependeDe: 'ext:Comercial' }),
@@ -92,7 +92,7 @@ export function buildDemoData(now: Date = new Date()): DbData {
 
     catalogo: proj({ nombre: 'Lanzamiento catálogo merch Q4', descripcion: 'Nuevo catálogo de artículos promocionales para la Red.', areaId: A.store, responsable: P.ricardo, fechaObjetivo: fin(21), i: 2, u: 3, d: 2, dependeDe: 'ext:Proveedor externo' }),
     pasarela: proj({ nombre: 'Integración pasarela de pagos SOC Store', descripcion: 'Cobro en línea para pedidos de oficinas.', areaId: A.store, responsable: P.sofia, fechaObjetivo: fin(30), i: 3, u: 2, d: 3, dependeDe: 'ext:Finanzas' }),
-    kitsBienvenida: proj({ nombre: 'Kits de bienvenida para nuevos asesores', descripcion: 'Kit físico y digital para nuevos asesores de la Red.', areaId: A.store, responsable: P.sofia, fechaObjetivo: fin(15), i: 2, u: 2, d: 2 }),
+    kitsBienvenida: proj({ nombre: 'Kits de bienvenida para nuevos asesores', descripcion: 'Kit físico y digital para nuevos asesores de la Red.', areaId: A.store, responsable: P.sofia, fechaObjetivo: fin(15), i: 2, u: 2, d: 2, eisenhower: 'delegar' }),
     pop: proj({ nombre: 'Inventario y reposición de material POP', descripcion: 'Control de inventario de material punto de venta.', areaId: A.store, responsable: P.ricardo, i: 1, u: 1, d: 1 }),
   };
 
