@@ -16,7 +16,8 @@
     "test:supabase": "vitest run --config vitest.supabase.config.ts",
     "test:supabase:sql": "bash supabase/tests/run.sh",
     "test:e2e:supabase": "playwright test --config playwright.supabase.config.ts",
-    "supabase:local": "node supabase/tests/stack.mjs"
+    "supabase:local": "node supabase/tests/stack.mjs",
+    "build:single": "tsc -b && vite build --mode single --outDir dist-single"
   },
   "engines": {
     "node": ">=18"
@@ -38,6 +39,7 @@
     "jsdom": "^29.1.1",
     "typescript": "^5.9.3",
     "vite": "^8.3.2",
+    "vite-plugin-singlefile": "^2.3.3",
     "vitest": "^5.0.3"
   }
 }

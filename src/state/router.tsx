@@ -1,18 +1,36 @@
 import { useCallback, useSyncExternalStore, type AnchorHTMLAttributes, type MouseEvent } from 'react';
 
-/** Router SPA mínimo basado en History API (sin dependencias). */
-const BASE = (import.meta.env.BASE_URL ?? '/').replace(/\/$/, '');
+/**
+ * Router SPA mínimo (sin dependencias). Modo "history" por defecto; modo "hash"
+ * (VITE_ROUTER=hash) para la versión de un solo archivo, que funciona sin
+ * servidor (abierta desde el disco o embebida).
+ */
+const HASH = import.meta.env.VITE_ROUTER === 'hash';
+const BASE = HASH ? '' : (import.meta.env.BASE_URL ?? '/').replace(/\/$/, '');
 const EVENT = 'au:navigate';
 
+/** Ruta en memoria si el entorno bloquea la History API (p. ej. marcos restringidos). */
+let memoryPath: string | null = null;
+
 function snapshot() {
+  if (memoryPath !== null) return memoryPath;
+  if (HASH) return window.location.hash.slice(1) || '/';
   return window.location.pathname + window.location.search;
+}
+
+function currentSearch() {
+  const full = snapshot();
+  const i = full.indexOf('?');
+  return i === -1 ? '' : full.slice(i);
 }
 
 function subscribe(fn: () => void) {
   window.addEventListener('popstate', fn);
+  window.addEventListener('hashchange', fn);
   window.addEventListener(EVENT, fn);
   return () => {
     window.removeEventListener('popstate', fn);
+    window.removeEventListener('hashchange', fn);
     window.removeEventListener(EVENT, fn);
   };
 }
@@ -20,7 +38,11 @@ function subscribe(fn: () => void) {
 export function navigate(to: string, opts: { replace?: boolean; keepScroll?: boolean } = {}) {
   const url = BASE + (to.startsWith('/') ? to : `/${to}`);
   if (url === snapshot()) return;
-  window.history[opts.replace ? 'replaceState' : 'pushState'](null, '', url);
+  try {
+    window.history[opts.replace ? 'replaceState' : 'pushState'](null, '', HASH ? `#${url}` : url);
+  } catch {
+    memoryPath = url;
+  }
   window.dispatchEvent(new Event(EVENT));
   if (!opts.keepScroll) window.scrollTo({ top: 0 });
 }
@@ -37,7 +59,7 @@ export function useQuery(): [URLSearchParams, (patch: Record<string, string | un
   const params = new URLSearchParams(search);
   const set = useCallback(
     (patch: Record<string, string | undefined>) => {
-      const next = new URLSearchParams(window.location.search);
+      const next = new URLSearchParams(currentSearch());
       for (const [k, v] of Object.entries(patch)) {
         if (v === undefined || v === '') next.delete(k);
         else next.set(k, v);
@@ -70,5 +92,5 @@ export function Link({ to, onClick, ...rest }: AnchorHTMLAttributes<HTMLAnchorEl
     e.preventDefault();
     navigate(to);
   };
-  return <a href={BASE + to} onClick={handle} {...rest} />;
+  return <a href={HASH ? `#${to}` : BASE + to} onClick={handle} {...rest} />;
 }

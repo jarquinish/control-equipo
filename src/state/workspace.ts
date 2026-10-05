@@ -26,7 +26,10 @@ function safeGet(key: string): string | null {
 }
 
 export function getWorkspace(): Workspace {
-  return safeGet(KEY) === 'demo' ? 'demo' : 'principal';
+  const saved = safeGet(KEY);
+  if (saved === 'demo' || saved === 'principal') return saved;
+  // La vista previa abre directamente con los datos demo.
+  return import.meta.env.VITE_PREVIEW === 'true' ? 'demo' : 'principal';
 }
 
 export function saveWorkspace(ws: Workspace): void {
@@ -45,6 +48,17 @@ export function createAdapter(ws: Workspace, auth?: AuthInfo | null): StorageAda
     return new RestAdapter({ baseUrl: import.meta.env.VITE_API_URL });
   }
   if (typeof indexedDB !== 'undefined') return new IndexedDbAdapter(`alignment-unblock-${ws}`);
+  try {
+    localStorage.setItem('au.test', '1');
+    localStorage.removeItem('au.test');
+    return new LocalStorageAdapter(`alignment-unblock-${ws}`);
+  } catch {
+    return new MemoryAdapter();
+  }
+}
+
+/** Alternativa cuando IndexedDB no está disponible: localStorage y, si tampoco, memoria. */
+export function fallbackAdapter(ws: Workspace): StorageAdapter {
   try {
     localStorage.setItem('au.test', '1');
     localStorage.removeItem('au.test');

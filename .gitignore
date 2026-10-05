@@ -9,3 +9,5 @@ playwright-report
 .DS_Store
 alignment-unblock-piloto.zip
 dist-supabase
+dist-single
+alignment-unblock-vista-previa.html

@@ -8,7 +8,7 @@ import { ensureIdentity } from '../services/identityService';
 import { RemoteError } from '../data/adapters/supabaseAdapter';
 import { useFeedback } from '../ui/feedback';
 import { useAuth, type AuthInfo } from './auth';
-import { createAdapter, getWorkspace, saveWorkspace, type Workspace } from './workspace';
+import { createAdapter, fallbackAdapter, getWorkspace, saveWorkspace, type Workspace } from './workspace';
 
 interface AppContextValue {
   store: DataStore;
@@ -31,8 +31,17 @@ class NotInitializedError extends Error {}
 
 async function openStore(ws: Workspace, auth: AuthInfo | null): Promise<{ store: DataStore; services: Services }> {
   const remote = ws === 'principal' ? auth : null;
-  const store = new DataStore(createAdapter(ws, remote));
-  const hadData = await store.init();
+  let store = new DataStore(createAdapter(ws, remote));
+  let hadData: boolean;
+  try {
+    hadData = await store.init();
+  } catch (err) {
+    if (remote) throw err;
+    // El navegador bloqueó IndexedDB (p. ej. vista incrustada): se intenta localStorage y luego memoria.
+    console.warn('[Alignment & Unblock] Almacenamiento local no disponible; se usa respaldo', err);
+    store = new DataStore(fallbackAdapter(ws));
+    hadData = await store.init();
+  }
   const services = createServices(store);
   const isAdmin = !remote || remote.member.rol === 'ADMIN' || remote.member.rol === 'DIRECTOR';
   if (!hadData) {

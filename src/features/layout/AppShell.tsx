@@ -42,13 +42,20 @@ const NAV = [
 
 export function AppShell({ children }: { children: ReactNode }) {
   const { path } = useLocation();
-  const { workspace, switchWorkspace, saveError } = useApp();
+  const { workspace, switchWorkspace, saveError, storageKind } = useApp();
   const [open, setOpen] = useState(false);
   useEffect(() => setOpen(false), [path]);
 
   return (
     <div className="shell">
-      <a href="#main" className="skip-link">
+      <a
+        href="#main"
+        className="skip-link"
+        onClick={(e) => {
+          e.preventDefault();
+          document.getElementById('main')?.focus();
+        }}
+      >
         Saltar al contenido
       </a>
       <aside className={`sidebar ${open ? 'open' : ''}`} aria-label="Navegación principal">
@@ -103,6 +110,11 @@ export function AppShell({ children }: { children: ReactNode }) {
             <button className="btn btn-sm btn-ghost-light" onClick={() => switchWorkspace('principal')}>
               Salir de la demo
             </button>
+          </div>
+        )}
+        {storageKind === 'memory' && (
+          <div className="banner banner-history" role="note">
+            Este navegador no permite guardar información aquí: los cambios se perderán al cerrar. Para uso real, abre la app publicada o descarga el archivo.
           </div>
         )}
         {saveError && (
