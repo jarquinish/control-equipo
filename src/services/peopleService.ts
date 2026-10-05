@@ -36,9 +36,9 @@ export function peopleService(ctx: ServiceContext) {
     create,
     /** Busca por nombre o crea un colaborador nuevo. */
     ensure: (nombre: string, areaId?: string) => create({ nombre, areaId }),
-    update(id: string, patch: Partial<PersonInput & { activo: boolean }>) {
+    update(id: string, patch: Partial<PersonInput & { activo: boolean }>): Person {
       if (patch.nombre !== undefined) assertValid(patch.nombre.trim() ? {} : { nombre: 'El nombre no puede quedar vacío.' });
-      return people.update(id, { ...patch, nombre: patch.nombre?.trim() ?? people.read(id)?.nombre, updatedAt: ctx.nowIso() } as Partial<Person>);
+      return people.update(id, { ...patch, nombre: patch.nombre?.trim() ?? people.read(id)?.nombre, email: patch.email !== undefined ? patch.email.trim().toLowerCase() || undefined : people.read(id)?.email, updatedAt: ctx.nowIso() } as Partial<Person>);
     },
     setActive: (id: string, activo: boolean) => people.update(id, { activo, updatedAt: ctx.nowIso() }),
     areaOf: (id: string | undefined): Area | undefined => ctx.repos.areas.read(people.read(id)?.areaId),

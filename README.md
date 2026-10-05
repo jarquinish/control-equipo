@@ -63,13 +63,13 @@ Responder cada semana, sin minutas narrativas:
 |---|---|---|
 | UI | **React 19 + TypeScript** | Componentes mantenibles y tipado estricto del dominio |
 | Build | **Vite** | Build rápido, SPA estática fácil de desplegar |
-| Persistencia V1 | **IndexedDB** (fallback localStorage / memoria) detrás de una capa de adaptadores | Funciona sin servidor y sobrevive al cierre del navegador |
+| Persistencia | **IndexedDB** local (por defecto) o **Supabase** (PostgreSQL compartido, multiusuario, tiempo real), detrás de una capa de adaptadores | Local funciona sin servidor; Supabase permite que todo el equipo trabaje sobre la misma información |
 | Íconos | `lucide-react` (tree-shaking) | Ligero, sólo se incluyen los íconos usados |
 | Tipografía | **DM Sans** (licencia OFL, empaquetada con `@fontsource`) | Alternativa geométrica a *Circular*, que es propietaria y **no** se incorporó |
 | Router | Router propio sobre History API (≈80 líneas) | Sin dependencias extra |
 | Pruebas | **Vitest** (dominio/servicios) + **Playwright** (E2E en Chromium) | |
 
-Sin librerías de estado, de formularios ni de gráficas. Build de producción ≈ **136 KB gzip** de JS + 10 KB de CSS + fuente.
+Sin librerías de estado, de formularios ni de gráficas. Build de producción ≈ **141 KB gzip** de JS + 10 KB de CSS + fuente. La librería de Supabase (≈55 KB gzip) se descarga sólo si se activa el modo Supabase.
 
 ---
 
@@ -270,7 +270,8 @@ Las dependencias se guardan como id de área interna o `ext:Nombre` (Comercial, 
 
 ## Pruebas
 
-- **Unitarias (Vitest, 25 pruebas)**: score y prioridad, rangos inválidos, override, Eisenhower, fechas/semana ISO, bloqueo → compromiso → en gestión, reprogramar (fecha original + contador + motivo), cumplir/escalar, vencidos, regla 8, Weekly completa semana 1 → semana 2 con historial intacto, exportar/restaurar/importar, rechazo de JSON inválido, CSV, persistencia IndexedDB entre "aperturas", adaptador REST, datos demo y cumplimiento.
+- **Unitarias (Vitest, 28 pruebas)**: score y prioridad, rangos inválidos, override, Eisenhower, fechas/semana ISO, bloqueo → compromiso → en gestión, reprogramar (fecha original + contador + motivo), cumplir/escalar, vencidos, regla 8, Weekly completa semana 1 → semana 2 con historial intacto, exportar/restaurar/importar, rechazo de JSON inválido, CSV, persistencia IndexedDB entre "aperturas", adaptador REST, datos demo y cumplimiento.
+- **Supabase**: `npm run test:supabase:sql` (esquema + RLS en PostgreSQL 16 real), `npm run test:supabase` (5 pruebas del adaptador con `supabase-js` contra PostgreSQL + PostgREST) y `npm run test:e2e:supabase` (navegador: código por correo, dos usuarios con roles, correo sin acceso, cerrar sesión). Ver [docs/SUPABASE.md](docs/SUPABASE.md#pruebas-automáticas-de-esta-integración).
 - **E2E (Playwright, 8 pruebas)**:
   - `weekly-flow.spec.ts` — **simulación completa de dos semanas desde la UI** (sección 55): responsables, las 4 áreas actualizan, Weekly de 7 pasos (Eisenhower, recálculo, override, detectar, destrabar, comprometer, decisión), cierre con ✓ TODO CLARO, resumen copiado al portapapeles y descargado, respaldo JSON; semana 2: revisar (cumplir con resolución de bloqueo, reprogramar validando motivo, escalar), nuevo proyecto, cierre de proyecto, segunda Weekly cerrada, **semana 1 sin cambios**, evolución sin duplicar, recarga del navegador, importación inválida rechazada y restauración del respaldo.
   - `demo-and-ux.spec.ts` — KPIs clicables, alertas, búsqueda global, Mis compromisos, dependencias, historial, aislamiento demo/principal, reinicio de demo con confirmación, drag & drop en Eisenhower y Kanban (incluida la regla de compromiso), y **sin scroll horizontal** en todas las vistas y los 7 pasos del Modo Junta a 1920×1080, 1440×900, 1366×768, 1024×768 y 390×844.
@@ -286,6 +287,7 @@ La app es una **SPA estática**: `npm run build` genera `dist/`, que puede servi
 | Nginx | `deploy/nginx.conf` (fallback SPA, caché de assets, gzip) |
 | Apache | `public/.htaccess` (se copia a `dist/`) |
 | Netlify | `public/_redirects` |
+| Netlify conectado a GitHub | `netlify.toml` (recomendado con Supabase: las variables se configuran en Netlify) |
 | Vercel | `vercel.json` |
 | Docker | `Dockerfile` (build + Nginx) → `docker build -t alignment-unblock . && docker run -p 8080:80 alignment-unblock` |
 
@@ -296,14 +298,25 @@ Variables de entorno (ver `.env.example`, ninguna obligatoria y **sin secretos**
 | Variable | Uso |
 |---|---|
 | `BASE_PATH` | Subdirectorio de publicación (por defecto `/`) |
-| `VITE_STORAGE` | `indexeddb` (por defecto) o `rest` |
+| `VITE_STORAGE` | `indexeddb` (por defecto), `supabase` o `rest` |
+| `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` | Proyecto de Supabase (la anon key es pública; la seguridad la aplica la RLS) |
+| `VITE_SUPABASE_MICROSOFT` | `true` muestra "Entrar con cuenta Microsoft" |
 | `VITE_API_URL` | URL base de la API cuando `VITE_STORAGE=rest` |
 
 ---
 
 ## Backend e integraciones futuras
 
-### Backend
+### Supabase (multiusuario) — implementado
+
+Guía paso a paso: **[docs/SUPABASE.md](docs/SUPABASE.md)** (crear proyecto, ejecutar el SQL, inicio de sesión por código de correo o cuenta Microsoft, publicar en Netlify, migrar el piloto, dar accesos).
+
+- Activación: `VITE_STORAGE=supabase`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` (ver `.env.example`).
+- Esquema y seguridad: [`supabase/migrations/0001_alignment_unblock.sql`](supabase/migrations/0001_alignment_unblock.sql) — tabla `au_records` (documento JSON por entidad, auditoría `updated_by/updated_at`), `au_members` (acceso por correo y rol), RLS por rol, funciones `au_replace_all` / `au_clear` sólo para Admin/Dirección, tiempo real y vistas para Power BI.
+- App: pantalla de acceso (código por correo y botón Microsoft opcional), verificación de que el correo esté dado de alta, vínculo automático con la persona del directorio, **Configuración → Accesos**, cambios de otros usuarios en tiempo real y recarga automática si el servidor rechaza un cambio.
+- Código: `src/data/adapters/supabaseAdapter.ts`, `src/state/auth.tsx`, `src/services/identityService.ts`, `src/features/settings/AccessSection.tsx`.
+
+### API REST propia (alternativa)
 
 `src/data/adapters/restAdapter.ts` ya traduce cada cambio a:
 
@@ -331,8 +344,9 @@ Para conectar PostgreSQL / Supabase / MySQL / Firebase: implementar esos endpoin
 
 ## Limitaciones conocidas
 
-- **Un solo navegador por espacio**: sin backend, la información no se comparte entre equipos/personas. Para trabajo colaborativo real se necesita el backend REST (el adaptador está listo; el servidor no está incluido).
-- **Usuario activo sin autenticación**: se elige en la barra superior; los permisos orientan la interfaz pero no son una barrera de seguridad.
+- **Modo local**: la información vive en un solo navegador. Para trabajo en equipo usa el **modo Supabase** (ver arriba).
+- **Modo local sin autenticación**: el usuario se elige en la barra superior. En modo Supabase hay inicio de sesión real y la RLS del servidor aplica los permisos críticos.
+- **Modo Supabase**: si dos personas editan el mismo registro a la vez gana el último guardado; requiere conexión a internet. Realtime y el inicio de sesión con Microsoft no se pudieron probar aquí (necesitan el servicio real de Supabase); la base, la API, la RLS y el acceso por código sí se probaron con PostgreSQL + PostgREST locales.
 - El borrado de datos del navegador elimina la información: usar **Generar respaldo** con regularidad.
 - No se envían correos ni notificaciones push (no hay infraestructura en V1).
 - La tipografía *Circular* no se incluyó por licencia; se usa DM Sans (OFL).
@@ -343,7 +357,8 @@ Para conectar PostgreSQL / Supabase / MySQL / Firebase: implementar esos endpoin
 
 ## Roadmap
 
-- **V2**: backend (Supabase/PostgreSQL) con autenticación Microsoft Entra ID y permisos aplicados en servidor; edición simultánea.
+- ~~Backend Supabase con autenticación y permisos en servidor~~ ✓ (falta crear el proyecto real y, opcionalmente, registrar la app en Microsoft Entra ID).
+- Fusión de ediciones simultáneas campo por campo.
 - Publicación automática del resumen en un canal de **Teams** al cerrar la Weekly.
 - Recordatorios de compromisos por **Outlook/Graph** (vence hoy / vencido).
 - Tendencias en Historial (cumplimiento por área y dependencias recurrentes por trimestre).

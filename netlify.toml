@@ -1,0 +1,14 @@
+# Netlify conectado al repositorio de GitHub.
+# Variables (Site settings → Environment variables): VITE_STORAGE, VITE_SUPABASE_URL,
+# VITE_SUPABASE_ANON_KEY y opcionalmente VITE_SUPABASE_MICROSOFT. Ver README → Supabase.
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "22"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

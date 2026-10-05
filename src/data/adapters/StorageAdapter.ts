@@ -25,4 +25,9 @@ export interface StorageAdapter {
   replaceAll(data: DbData): Promise<void>;
   /** Elimina todo el contenido. */
   clear(): Promise<void>;
+  /**
+   * Opcional: cambios hechos por OTROS usuarios (tiempo real). Devuelve la
+   * función para cancelar la suscripción.
+   */
+  subscribe?(onChange: (op: ChangeOp) => void): () => void;
 }

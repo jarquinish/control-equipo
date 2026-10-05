@@ -28,7 +28,7 @@ export function createContext(store: DataStore, now: () => Date = () => new Date
     now,
     nowIso: () => now().toISOString(),
     settings: () => getSettings(store.getState()),
-    userId: () => getSettings(store.getState()).currentUserId,
+    userId: () => store.identity ?? getSettings(store.getState()).currentUserId,
     activeWeek: () => getActiveWeek(store.getState()),
   };
 }

@@ -1,5 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { AppProvider } from './state/app';
+import { AuthGate } from './state/auth';
 import { match, useLocation } from './state/router';
 import { FeedbackProvider } from './ui/feedback';
 import { ModalProvider } from './features/modals/ModalHost';
@@ -86,11 +87,13 @@ export function App() {
   return (
     <ErrorBoundary>
       <FeedbackProvider>
-        <AppProvider fallback={<Loading />}>
-          <ModalProvider>
-            <Routes />
-          </ModalProvider>
-        </AppProvider>
+        <AuthGate>
+          <AppProvider fallback={<Loading />}>
+            <ModalProvider>
+              <Routes />
+            </ModalProvider>
+          </AppProvider>
+        </AuthGate>
       </FeedbackProvider>
     </ErrorBoundary>
   );

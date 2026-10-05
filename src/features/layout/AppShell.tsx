@@ -18,6 +18,7 @@ import {
   FlaskConical,
   Eye,
   CalendarPlus,
+  LogOut,
 } from 'lucide-react';
 import { fmtDate, fmtShort } from '../../domain/dates';
 import { sortWeeks } from '../../domain/selectors';
@@ -315,6 +316,28 @@ function UserSwitcher() {
   const db = useDb();
   const user = useCurrentUser();
   const services = useServices();
+  const { auth } = useApp();
+  if (auth) {
+    return (
+      <div className="user-switch" title={auth.email}>
+        <span className="avatar" aria-hidden>
+          {(user?.nombre ?? auth.email)
+            .split(' ')
+            .map((x) => x[0])
+            .slice(0, 2)
+            .join('')
+            .toUpperCase()}
+        </span>
+        <span className="user-name">
+          <strong>{user?.nombre ?? auth.email}</strong>
+          <small>{ROLE_LABELS[auth.member.rol]}</small>
+        </span>
+        <button className="btn btn-ghost btn-sm" onClick={() => void auth.signOut()} title="Cerrar sesión">
+          <LogOut size={16} aria-hidden /> <span className="hide-md">Salir</span>
+        </button>
+      </div>
+    );
+  }
   const people = db.people.filter((p) => p.activo).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
   return (
     <label className="user-switch" title="Usuario activo (preparado para autenticación futura)">

@@ -12,6 +12,8 @@ import { friendlyError, useFeedback } from '../../ui/feedback';
 import { Modal } from '../../ui/Modal';
 import { can } from '../../domain/permissions';
 import { bootstrapEmpty } from '../../services';
+import { AccessSection } from './AccessSection';
+import { ensureIdentity } from '../../services/identityService';
 
 const ACTION_LABELS: Record<Action, string> = {
   'project.edit': 'Editar proyectos',
@@ -30,7 +32,7 @@ export function SettingsPage() {
   const user = useCurrentUser();
   const services = useServices();
   const active = useActiveWeek();
-  const { workspace, storageKind, switchWorkspace, resetDemo, now, store, setViewWeekId } = useApp();
+  const { workspace, storageKind, switchWorkspace, resetDemo, now, store, setViewWeekId, auth } = useApp();
   const { run, toast, confirm, runAsync } = useFeedback();
   const fileRef = useRef<HTMLInputElement>(null);
   const [pending, setPending] = useState<{ mode: 'restore' | 'import'; result: ParseResult; name: string } | null>(null);
@@ -67,13 +69,23 @@ export function SettingsPage() {
   const applyPending = async (file: BackupFile) => {
     if (!pending) return;
     if (pending.mode === 'restore') {
-      await runAsync(() => services.backup.restore(file), 'Respaldo restaurado');
+      await runAsync(async () => {
+        await services.backup.restore(file);
+        await relink();
+      }, 'Respaldo restaurado');
       setViewWeekId(undefined);
     } else {
       run(() => services.backup.importMerge(file), 'Información importada');
       await store.flush();
     }
     setPending(null);
+  };
+
+  /** En modo compartido, vuelve a vincular la sesión con su persona tras reemplazar los datos. */
+  const relink = async () => {
+    if (!auth) return;
+    store.identity = ensureIdentity(services, { email: auth.email, name: auth.name, rol: auth.member.rol, personId: auth.member.person_id });
+    await store.flush();
   };
 
   const setCriteria = (k: keyof Criteria, v: string) => run(() => services.settings.setCriteria({ [k]: Number(v) }));
@@ -103,6 +115,7 @@ export function SettingsPage() {
     await runAsync(async () => {
       await store.clear();
       bootstrapEmpty(services);
+      await relink();
     }, 'Información borrada');
     setViewWeekId(undefined);
   };
@@ -111,6 +124,8 @@ export function SettingsPage() {
     <div className="page settings">
       <PageHeader title="Configuración" subtitle="Áreas, responsables, estados, semana activa, criterios y datos." />
       {!allowed && <p className="alert alert-yellow">Tu rol ({user ? ROLE_LABELS[user.rol] : '—'}) no administra la configuración. Puedes consultarla, pero los cambios los realiza Dirección o Administración.</p>}
+
+      {auth && <AccessSection auth={auth} />}
 
       <fieldset disabled={!allowed} className="settings-fieldset">
         <Section title="Semana activa" id="cfg-week">
@@ -396,7 +411,11 @@ export function SettingsPage() {
           <p className="small">
             <Database size={14} aria-hidden /> Espacio: <strong>{workspace === 'demo' ? 'Demo' : 'Principal'}</strong> · motor: <strong>{storageKind}</strong> · {db.projects.length} proyectos · {db.commitments.length} compromisos · {db.weeks.length} semanas
           </p>
-          <p className="small muted">La información se guarda en este navegador. Genera respaldos periódicos; para trabajo multiusuario, ver README → Backend.</p>
+          <p className="small muted">
+            {storageKind === 'supabase'
+              ? 'Información compartida en Supabase: todos los usuarios con acceso ven los cambios en tiempo real. Genera respaldos periódicos de todas formas.'
+              : 'La información se guarda en este navegador. Genera respaldos periódicos; para trabajo multiusuario, ver README → Supabase.'}
+          </p>
           <button className="btn btn-ghost-danger" onClick={wipe} disabled={!allowed}>
             <Trash2 size={16} aria-hidden /> Borrar toda la información de este espacio
           </button>

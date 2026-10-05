@@ -33,6 +33,9 @@ export class DataStore {
   private batchDepth = 0;
   private dirty = false;
   ready = false;
+  /** Persona autenticada (modo multiusuario). Tiene prioridad sobre settings.currentUserId. */
+  identity: string | undefined;
+  private unsubscribeRemote?: () => void;
 
   constructor(public adapter: StorageAdapter) {}
 
@@ -41,7 +44,37 @@ export class DataStore {
     this.data = normalizeData(loaded);
     this.ready = true;
     this.emit();
+    this.unsubscribeRemote = this.adapter.subscribe?.((op) => this.applyExternal(op));
     return loaded !== null;
+  }
+
+  /** Detiene la sincronización en tiempo real. */
+  dispose(): void {
+    this.unsubscribeRemote?.();
+    this.unsubscribeRemote = undefined;
+  }
+
+  /** Aplica un cambio que llegó de otro usuario, sin volver a persistirlo. */
+  applyExternal(op: ChangeOp): void {
+    const list = this.data[op.collection] as { id: string }[];
+    if (op.type === 'delete') {
+      if (!list.some((i) => i.id === op.id)) return;
+      this.data = { ...this.data, [op.collection]: list.filter((i) => i.id !== op.id) };
+    } else {
+      const exists = list.some((i) => i.id === op.item.id);
+      this.data = {
+        ...this.data,
+        [op.collection]: exists ? list.map((i) => (i.id === op.item.id ? op.item : i)) : [...list, op.item],
+      };
+    }
+    this.emit();
+  }
+
+  /** Vuelve a leer todo desde el almacenamiento (p. ej. tras un rechazo del servidor). */
+  async reload(): Promise<void> {
+    await this.flush();
+    this.data = normalizeData(await this.adapter.load());
+    this.emit();
   }
 
   getState = (): DbData => this.data;

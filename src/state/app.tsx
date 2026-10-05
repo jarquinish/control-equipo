@@ -4,6 +4,10 @@ import { getActiveWeek, getSettings, getWeekData, liveSelection, type WeekData }
 import type { DbData, Person, Settings } from '../domain/types';
 import { bootstrapEmpty, createServices, type Services } from '../services';
 import { buildDemoData } from '../services/demoService';
+import { ensureIdentity } from '../services/identityService';
+import { RemoteError } from '../data/adapters/supabaseAdapter';
+import { useFeedback } from '../ui/feedback';
+import { useAuth, type AuthInfo } from './auth';
 import { createAdapter, getWorkspace, saveWorkspace, type Workspace } from './workspace';
 
 interface AppContextValue {
@@ -17,19 +21,31 @@ interface AppContextValue {
   switchWorkspace: (ws: Workspace) => Promise<void>;
   resetDemo: () => Promise<void>;
   saveError: string | null;
+  /** Sesión multiusuario (Supabase); `null` en modo local o en la demo. */
+  auth: AuthInfo | null;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
 
-async function openStore(ws: Workspace): Promise<{ store: DataStore; services: Services }> {
-  const store = new DataStore(createAdapter(ws));
+class NotInitializedError extends Error {}
+
+async function openStore(ws: Workspace, auth: AuthInfo | null): Promise<{ store: DataStore; services: Services }> {
+  const remote = ws === 'principal' ? auth : null;
+  const store = new DataStore(createAdapter(ws, remote));
   const hadData = await store.init();
   const services = createServices(store);
+  const isAdmin = !remote || remote.member.rol === 'ADMIN' || remote.member.rol === 'DIRECTOR';
   if (!hadData) {
     if (ws === 'demo') await store.replaceAll(buildDemoData(new Date()));
-    else bootstrapEmpty(services);
-  } else {
+    else if (!isAdmin) {
+      store.dispose();
+      throw new NotInitializedError();
+    } else bootstrapEmpty(services);
+  } else if (isAdmin) {
     services.weeks.ensureCurrentWeek();
+  }
+  if (remote) {
+    store.identity = ensureIdentity(services, { email: remote.email, name: remote.name, rol: remote.member.rol, personId: remote.member.person_id }, !hadData);
   }
   await store.flush();
   return { store, services };
@@ -41,18 +57,38 @@ export function AppProvider({ children, fallback }: { children: ReactNode; fallb
   const [saveError, setSaveError] = useState<string | null>(null);
   const [now, setNow] = useState(() => new Date());
   const [viewWeekId, setViewWeekId] = useState<string | undefined>();
+  const auth = useAuth();
+  const { toast } = useFeedback();
 
-  const load = useCallback(async (ws: Workspace) => {
-    try {
-      const opened = await openStore(ws);
-      opened.store.onError(() => setSaveError('No se pudo guardar el último cambio en este navegador. Genera un respaldo y recarga la página.'));
-      setState({ ...opened, workspace: ws });
-      setViewWeekId(undefined);
-    } catch (err) {
-      console.error('[Alignment & Unblock] Error al abrir el almacenamiento', err);
-      setLoadError('No fue posible abrir la información guardada en este navegador. Revisa que no estés en modo privado o que el almacenamiento no esté bloqueado.');
-    }
-  }, []);
+  const load = useCallback(
+    async (ws: Workspace) => {
+      try {
+        const opened = await openStore(ws, auth);
+        opened.store.onError((err) => {
+          if (err instanceof RemoteError) {
+            // El servidor rechazó el cambio: se avisa y se vuelve a la versión del servidor.
+            toast(err.message, 'error');
+            void opened.store.reload().catch(() => setSaveError('Sin conexión con el servidor. Los cambios recientes podrían no haberse guardado.'));
+          } else {
+            setSaveError('No se pudo guardar el último cambio en este navegador. Genera un respaldo y recarga la página.');
+          }
+        });
+        setState({ ...opened, workspace: ws });
+        setViewWeekId(undefined);
+      } catch (err) {
+        console.error('[Alignment & Unblock] Error al abrir el almacenamiento', err);
+        setLoadError(
+          err instanceof NotInitializedError
+            ? 'El espacio compartido aún no está inicializado. Dirección debe entrar primero para crear las áreas y la semana activa.'
+            : err instanceof RemoteError
+              ? err.message
+              : 'No fue posible abrir la información guardada en este navegador. Revisa que no estés en modo privado o que el almacenamiento no esté bloqueado.',
+        );
+      }
+    },
+    [auth, toast],
+  );
+
 
   useEffect(() => {
     void load(getWorkspace());
@@ -67,6 +103,7 @@ export function AppProvider({ children, fallback }: { children: ReactNode; fallb
   const switchWorkspace = useCallback(
     async (ws: Workspace) => {
       await state?.store.flush();
+      state?.store.dispose();
       saveWorkspace(ws);
       setState(null);
       await load(ws);
@@ -82,6 +119,7 @@ export function AppProvider({ children, fallback }: { children: ReactNode; fallb
       await state.store.replaceAll(buildDemoData(new Date()));
       setViewWeekId(undefined);
     } else {
+      state.store.dispose();
       setState(null);
       const store = new DataStore(createAdapter('demo'));
       await store.init();
@@ -101,8 +139,9 @@ export function AppProvider({ children, fallback }: { children: ReactNode; fallb
         switchWorkspace,
         resetDemo,
         saveError,
+        auth: state.workspace === 'principal' ? auth : null,
       },
-    [state, now, viewWeekId, switchWorkspace, resetDemo, saveError],
+    [state, now, viewWeekId, switchWorkspace, resetDemo, saveError, auth],
   );
 
   if (loadError) {
@@ -110,7 +149,14 @@ export function AppProvider({ children, fallback }: { children: ReactNode; fallb
       <div className="fatal" role="alert">
         <h1>Alignment &amp; Unblock</h1>
         <p>{loadError}</p>
-        <button className="btn btn-primary" onClick={() => window.location.reload()}>Reintentar</button>
+        <div className="row gap">
+          <button className="btn btn-primary" onClick={() => window.location.reload()}>Reintentar</button>
+          {auth && (
+            <button className="btn btn-secondary" onClick={() => void auth.signOut()}>
+              Cerrar sesión
+            </button>
+          )}
+        </div>
       </div>
     );
   }
@@ -142,7 +188,9 @@ export function useSettings(): Settings {
 export function useCurrentUser(): Person | undefined {
   const db = useDb();
   const s = useSettings();
-  return db.people.find((p) => p.id === s.currentUserId);
+  const { store } = useApp();
+  const id = store.identity ?? s.currentUserId;
+  return db.people.find((p) => p.id === id);
 }
 
 /** Datos de la semana que se está viendo (viva o histórica). */

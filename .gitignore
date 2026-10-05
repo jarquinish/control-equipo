@@ -7,3 +7,5 @@ playwright-report
 .env.local
 *.log
 .DS_Store
+alignment-unblock-piloto.zip
+dist-supabase

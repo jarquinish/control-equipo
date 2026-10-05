@@ -12,13 +12,18 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "test:all": "npm run typecheck && npm run test && npm run build && npm run test:e2e"
+    "test:all": "npm run typecheck && npm run test && npm run build && npm run test:e2e",
+    "test:supabase": "vitest run --config vitest.supabase.config.ts",
+    "test:supabase:sql": "bash supabase/tests/run.sh",
+    "test:e2e:supabase": "playwright test --config playwright.supabase.config.ts",
+    "supabase:local": "node supabase/tests/stack.mjs"
   },
   "engines": {
     "node": ">=18"
   },
   "dependencies": {
     "@fontsource-variable/dm-sans": "^5.3.0",
+    "@supabase/supabase-js": "^2.117.2",
     "lucide-react": "^1.52.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0"
