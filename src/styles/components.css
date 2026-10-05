@@ -835,7 +835,7 @@ a.cell-title:hover,
 /* ───────── Toasts ───────── */
 .toasts {
   position: fixed;
-  bottom: 20px;
+  bottom: 92px;
   right: 20px;
   display: grid;
   gap: 8px;

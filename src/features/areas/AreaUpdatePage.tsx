@@ -12,6 +12,7 @@ import { EmptyState, PageHeader } from '../../ui/common';
 import { useFeedback } from '../../ui/feedback';
 import { LevelPicker, PersonSelect } from '../../ui/forms';
 import { useModals } from '../modals/ModalHost';
+import { ProjectQuickForm } from '../projects/ProjectQuickForm';
 
 /** ACTUALIZAR MI SEMANA: flujo rápido para que cada gerente prepare la Weekly. */
 export function AreaUpdatePage() {
@@ -128,6 +129,13 @@ export function AreaUpdatePage() {
           </>
         )}
       </div>
+
+      {live && (
+        <details className="area-register" open={projects.length === 0}>
+          <summary className="btn btn-secondary">＋ Registrar proyecto de {area.nombre}</summary>
+          <ProjectQuickForm key={area.id} areaId={area.id} areaName={area.nombre} origen="area" />
+        </details>
+      )}
 
       {projects.length === 0 ? (
         <EmptyState title={`${area.nombre} aún no tiene proyectos activos`} action={live && <button className="btn btn-primary" onClick={() => modals.open({ type: 'project', areaId: area.id })}>Crear proyecto</button>}>

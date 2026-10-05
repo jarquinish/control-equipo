@@ -51,7 +51,7 @@ export function sessionService(ctx: ServiceContext) {
         weekId: week.id,
         fecha: toISODate(ctx.now()),
         estado: 'en_curso',
-        pasoActual: kickoff ? 3 : 1,
+        pasoActual: kickoff ? 2 : 1,
         proyectosRevisados: [],
         decisiones: [],
         compromisos: [],
@@ -64,7 +64,7 @@ export function sessionService(ctx: ServiceContext) {
     /** Sesión de arranque: mueve la etapa actual (clave de domain/kickoff.ts). */
     setStage(id: string, etapa: string) {
       const paso = Number(etapa.split(':')[1]);
-      return patch(id, { etapa, ...(paso ? { pasoActual: paso } : {}) });
+      return patch(id, { etapa, ...(Number.isFinite(paso) && paso > 0 ? { pasoActual: paso } : {}) });
     },
 
     /** Confirma que la ponderación de un proyecto fue revisada en la sesión. */

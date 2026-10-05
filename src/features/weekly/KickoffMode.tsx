@@ -1,35 +1,9 @@
-import { useMemo, useRef, useState, type FormEvent } from "react";
-import {
-  AlertTriangle,
-  ArrowLeft,
-  ArrowRight,
-  CheckCircle2,
-  Flag,
-  LogOut,
-  Maximize2,
-  Pencil,
-  Plus,
-  Trash2,
-} from "lucide-react";
-import {
-  DEPENDENCY_LABELS,
-  IMPACT_LABELS,
-  QUADRANT_HINTS,
-  QUADRANT_LABELS,
-  QUADRANTS,
-  RULES,
-  URGENCY_LABELS,
-  WEEKLY_STEPS,
-} from "../../domain/constants";
-import { fmtDate } from "../../domain/dates";
-import {
-  isAreaStage,
-  kickoffStages,
-  METHOD_OBJECTIVE,
-  METHOD_STEPS,
-  stageIndex,
-  type KickoffStage,
-} from "../../domain/kickoff";
+import { useMemo } from 'react';
+import { AlertTriangle, ArrowLeft, ArrowRight, CheckCircle2, Flag, LogOut, Maximize2, Pencil, Trash2 } from 'lucide-react';
+import { DEPENDENCY_LABELS, IMPACT_LABELS, QUADRANT_HINTS, QUADRANT_LABELS, QUADRANTS, RULES, URGENCY_LABELS } from '../../domain/constants';
+import { fmtDate, fmtDeadline } from '../../domain/dates';
+import { AREA_STEP_LABELS, isAreaStage, kickoffStages, METHOD_OBJECTIVE, METHOD_STEPS, stageIndex, type KickoffAreaStep } from '../../domain/kickoff';
+import { computeKpis } from '../../domain/metrics';
 import {
   blockIsManaged,
   commitmentDisplayStatus,
@@ -41,143 +15,94 @@ import {
   sortByDeadline,
   sortProjectsByPriority,
   type WeekData,
-} from "../../domain/selectors";
-import type { Area, Session } from "../../domain/types";
-import {
-  closingIssues,
-  sliceByArea,
-  type ClosingIssue,
-} from "../../domain/weekly";
-import { useApp, useDb, useServices, useSettings } from "../../state/app";
-import { navigate } from "../../state/router";
-import {
-  AreaDot,
-  BlockedChip,
-  Chip,
-  CommitmentStatusChip,
-  PriorityBadge,
-} from "../../ui/badges";
-import { EmptyState, Question } from "../../ui/common";
-import { friendlyError, useFeedback } from "../../ui/feedback";
-import { PersonSelect } from "../../ui/forms";
-import { useModals } from "../modals/ModalHost";
-import { Step3Order, Step4Prioritize } from "./steps1to4";
-import { Step5Detect, Step6Unblock, Step7Close } from "./steps5to7";
-import { ValidationError } from "../../domain/validation";
+} from '../../domain/selectors';
+import type { Area, Session } from '../../domain/types';
+import { closingIssues, sliceByArea, type ClosingIssue } from '../../domain/weekly';
+import { useApp, useDb, useServices, useSettings } from '../../state/app';
+import { navigate } from '../../state/router';
+import { AreaDot, BlockedChip, Chip, CommitmentStatusChip, PriorityBadge, ProjectStatusChip, QuadrantChip } from '../../ui/badges';
+import { EmptyState, Question } from '../../ui/common';
+import { useFeedback } from '../../ui/feedback';
+import { useModals } from '../modals/ModalHost';
+import { ProjectQuickForm } from '../projects/ProjectQuickForm';
+import { Step2Visibilize, Step3Order, Step4Prioritize } from './steps1to4';
+import { Step5Detect, Step6Unblock, Step7Close } from './steps5to7';
 
-const STEP_META = Object.fromEntries(WEEKLY_STEPS.map((s) => [s.n, s]));
+const AREA_QUESTIONS: Record<KickoffAreaStep, (area: string) => string> = {
+  registro: (a) => `¿CUÁLES SON LOS PROYECTOS DE ${a}?`,
+  2: () => '¿EN QUÉ ESTAMOS?',
+  3: () => '¿ES IMPORTANTE, URGENTE O AMBAS?',
+  4: () => '¿ESTE ORDEN REPRESENTA REALMENTE LAS PRIORIDADES DE LA DIRECCIÓN?',
+  5: () => '¿PUEDE AVANZAR?',
+  6: () => '¿QUÉ NECESITAMOS PARA AVANZAR?',
+  7: (a) => `¿CON QUÉ SALE ${a}?`,
+};
 
 /**
- * SESIÓN 1 · ARRANQUE
- * Metodología → Proyectos por área → (por área) Ordenar, Priorizar, Detectar,
- * Destrabar y Cerrar → Cierre general.
+ * SESIÓN 1 · ARRANQUE — un área a la vez:
+ * Metodología → Contenido (registro, 2–7) → Diseño (registro, 2–7) →
+ * Marketing Digital (registro, 2–7) → SOC Store (registro, 2–7) → Resumen final.
  */
-export function KickoffFrame({
-  session,
-  data,
-  weekNumber,
-  range,
-}: {
-  session: Session;
-  data: WeekData;
-  weekNumber: number;
-  range: string;
-}) {
+export function KickoffFrame({ session, data, weekNumber, range }: { session: Session; data: WeekData; weekNumber: number; range: string }) {
   const db = useDb();
   const services = useServices();
   const { run } = useFeedback();
-  const areas = useMemo(
-    () => db.areas.filter((a) => a.activo).sort((a, b) => a.orden - b.orden),
-    [db.areas],
-  );
+  const areas = useMemo(() => db.areas.filter((a) => a.activo).sort((a, b) => a.orden - b.orden), [db.areas]);
   const stages = useMemo(() => kickoffStages(areas), [areas]);
   const idx = stageIndex(stages, session.etapa);
   const stage = stages[idx];
-  const area = isAreaStage(stage)
-    ? areas.find((a) => a.id === stage.areaId)
-    : undefined;
+  const areaStage = isAreaStage(stage) ? stage : undefined;
+  const area = areaStage ? areas.find((a) => a.id === areaStage.areaId) : undefined;
   const closed = new Set(session.areasCerradas ?? []);
   const number = services.sessions.number(session.id);
+  const areaData = area ? sliceByArea(data, area.id) : undefined;
 
   const go = (target: number) => {
     if (target < 0 || target >= stages.length) return;
     run(() =>
       services.ctx.store.batch(() => {
-        // Salir hacia adelante del paso 7 de un área = el área queda cerrada.
-        if (target > idx && isAreaStage(stage) && stage.paso === 7)
-          services.sessions.closeArea(session.id, stage.areaId);
+        // Avanzar desde el paso 7 de un área = el área queda cerrada.
+        if (target > idx && areaStage?.paso === 7) services.sessions.closeArea(session.id, areaStage.areaId);
         services.sessions.setStage(session.id, stages[target].key);
       }),
     );
-    document.querySelector(".meeting-body")?.scrollTo({ top: 0 });
+    document.querySelector('.meeting-body')?.scrollTo({ top: 0 });
   };
 
-  const title = (() => {
-    if (stage.key === "metodologia")
-      return {
-        eyebrow: `Sesión ${number} · Arranque · Metodología`,
-        h1: "¿CÓMO VAMOS A TRABAJAR?",
-      };
-    if (stage.key === "proyectos")
-      return {
-        eyebrow: `Sesión ${number} · Arranque · Levantamiento`,
-        h1: "¿CUÁLES SON NUESTROS PROYECTOS?",
-      };
-    if (stage.key === "cierre")
-      return {
-        eyebrow: `Sesión ${number} · Cierre general`,
-        h1: "¿CON QUÉ SALIMOS?",
-      };
-    const s = stage as { paso: 3 | 4 | 5 | 6 | 7 };
-    const meta = STEP_META[s.paso];
-    return {
-      eyebrow: `${area?.nombre} · Paso ${s.paso} · ${meta.titulo}`,
-      h1:
-        s.paso === 7
-          ? `¿CON QUÉ SALE ${area?.nombre.toUpperCase()}?`
-          : meta.pregunta.toUpperCase(),
-    };
-  })();
-
-  const nextLabel = (() => {
-    const next = stages[idx + 1];
-    if (!next) return null;
-    if (next.key === "proyectos") return "Proyectos por área";
-    if (next.key === "cierre")
-      return isAreaStage(stage)
-        ? `Cerrar ${area?.nombre} · Cierre general`
-        : "Cierre general";
-    if (isAreaStage(next)) {
-      const a = areas.find((x) => x.id === next.areaId);
-      if (isAreaStage(stage) && stage.paso === 7)
-        return `Cerrar ${area?.nombre} · Seguir con ${a?.nombre}`;
-      if (!isAreaStage(stage)) return `Empezar con ${a?.nombre}`;
-      return STEP_META[next.paso].titulo;
+  const stageLabel = (i: number): string => {
+    const s = stages[i];
+    if (!s) return '';
+    if (s.key === 'metodologia') return 'Metodología';
+    if (s.key === 'cierre') return 'Resumen final';
+    if (isAreaStage(s)) {
+      const a = areas.find((x) => x.id === s.areaId)?.nombre ?? '';
+      if (areaStage && s.areaId === areaStage.areaId) return AREA_STEP_LABELS[s.paso];
+      return s.paso === 'registro' ? `${a} · Registro` : `${a} · ${AREA_STEP_LABELS[s.paso]}`;
     }
-    return "Siguiente";
+    return '';
+  };
+  const nextLabel = (() => {
+    if (idx >= stages.length - 1) return null;
+    if (areaStage?.paso === 7) return `Cerrar ${area?.nombre} · ${stageLabel(idx + 1)}`;
+    return stageLabel(idx + 1);
   })();
 
-  const prevLabel = (() => {
-    const prev = stages[idx - 1];
-    if (!prev) return null;
-    if (prev.key === "metodologia") return "Metodología";
-    if (prev.key === "proyectos") return "Proyectos por área";
-    if (isAreaStage(prev))
-      return isAreaStage(stage) && prev.areaId === stage.areaId
-        ? STEP_META[prev.paso].titulo
-        : `${areas.find((a) => a.id === prev.areaId)?.nombre} · Cerrar`;
-    return "Anterior";
+  const header = (() => {
+    if (stage.key === 'metodologia') return { eyebrow: `Sesión ${number} · Arranque · Metodología`, h1: '¿CÓMO VAMOS A TRABAJAR?', top: 'METODOLOGÍA' };
+    if (stage.key === 'cierre') return { eyebrow: `Sesión ${number} · Resumen final`, h1: '¿CON QUÉ SALIMOS?', top: 'RESUMEN FINAL' };
+    const name = area?.nombre ?? '';
+    const p = areaStage!.paso;
+    return {
+      eyebrow: p === 'registro' ? `${name} · Registro de proyectos` : `${name} · Paso ${p} · ${AREA_STEP_LABELS[p]}`,
+      h1: AREA_QUESTIONS[p](name.toUpperCase()),
+      top: p === 'registro' ? `${name.toUpperCase()} · REGISTRO DE PROYECTOS` : `${name.toUpperCase()} · PASO ${p} DE 7`,
+    };
   })();
 
   const fullscreen = () => {
     if (document.fullscreenElement) void document.exitFullscreen();
-    else
-      void document.documentElement
-        .requestFullscreen?.()
-        .catch(() => undefined);
+    else void document.documentElement.requestFullscreen?.().catch(() => undefined);
   };
-
-  const areaData = area ? sliceByArea(data, area.id) : undefined;
 
   return (
     <div className="meeting kickoff" data-testid="kickoff-mode">
@@ -188,42 +113,19 @@ export function KickoffFrame({
             Sesión {number} · Semana {weekNumber} · {range}
           </span>
         </div>
-        <div
-          className="meeting-progress"
-          aria-label={`Etapa ${idx + 1} de ${stages.length}`}
-        >
+        <div className="meeting-progress" aria-label={`Etapa ${idx + 1} de ${stages.length}`}>
           <span className="step-count" data-testid="kickoff-stage">
-            {stage.key === "metodologia"
-              ? "METODOLOGÍA"
-              : stage.key === "proyectos"
-                ? "PROYECTOS POR ÁREA"
-                : stage.key === "cierre"
-                  ? "CIERRE GENERAL"
-                  : `${area?.nombre.toUpperCase()} · PASO ${(stage as { paso: number }).paso} DE 7`}
+            {header.top}
           </span>
-          <div
-            className="progress"
-            role="progressbar"
-            aria-valuemin={1}
-            aria-valuemax={stages.length}
-            aria-valuenow={idx + 1}
-          >
+          <div className="progress" role="progressbar" aria-valuemin={1} aria-valuemax={stages.length} aria-valuenow={idx + 1}>
             <div style={{ width: `${((idx + 1) / stages.length) * 100}%` }} />
           </div>
         </div>
         <div className="meeting-tools">
-          <button
-            className="btn btn-ghost btn-sm"
-            onClick={fullscreen}
-            title="Pantalla completa"
-          >
-            <Maximize2 size={16} aria-hidden />{" "}
-            <span className="hide-md">Pantalla completa</span>
+          <button className="btn btn-ghost btn-sm" onClick={fullscreen} title="Pantalla completa">
+            <Maximize2 size={16} aria-hidden /> <span className="hide-md">Pantalla completa</span>
           </button>
-          <button
-            className="btn btn-ghost btn-sm"
-            onClick={() => navigate("/weekly")}
-          >
+          <button className="btn btn-ghost btn-sm" onClick={() => navigate('/weekly')}>
             <LogOut size={16} aria-hidden /> Salir
           </button>
         </div>
@@ -231,119 +133,55 @@ export function KickoffFrame({
 
       <div className="kickoff-navs">
         <nav className="step-pills" aria-label="Etapas de la sesión">
-          <PhasePill
-            label="Metodología"
-            on={stage.key === "metodologia"}
-            past={idx > 0}
-            onClick={() => go(0)}
-          />
-          <PhasePill
-            label="Proyectos por área"
-            on={stage.key === "proyectos"}
-            past={idx > 1}
-            onClick={() => go(1)}
-          />
+          <PhasePill label="Metodología" on={stage.key === 'metodologia'} past={idx > 0} onClick={() => go(0)} />
           {areas.map((a) => {
-            const first = stages.findIndex(
-              (s) => isAreaStage(s) && s.areaId === a.id,
-            );
-            return (
-              <PhasePill
-                key={a.id}
-                label={a.nombre}
-                dot={a.color}
-                on={area?.id === a.id}
-                past={closed.has(a.id)}
-                onClick={() => go(first)}
-              />
-            );
+            const first = stages.findIndex((s) => isAreaStage(s) && s.areaId === a.id);
+            return <PhasePill key={a.id} label={a.nombre} dot={a.color} on={area?.id === a.id} past={closed.has(a.id)} onClick={() => go(first)} />;
           })}
-          <PhasePill
-            label="Cierre"
-            on={stage.key === "cierre"}
-            past={false}
-            onClick={() => go(stages.length - 1)}
-          />
+          <PhasePill label="Resumen final" on={stage.key === 'cierre'} past={false} onClick={() => go(stages.length - 1)} />
         </nav>
-        {area && isAreaStage(stage) && (
+        {area && areaStage && (
           <nav className="substeps" aria-label={`Pasos de ${area.nombre}`}>
-            {[3, 4, 5, 6, 7].map((n) => {
-              const target = stages.findIndex(
-                (s) => s.key === `${area.id}:${n}`,
-              );
+            {(['registro', 2, 3, 4, 5, 6, 7] as KickoffAreaStep[]).map((n, i) => {
+              const target = stages.findIndex((s) => s.key === `${area.id}:${n}`);
+              const current = (['registro', 2, 3, 4, 5, 6, 7] as KickoffAreaStep[]).indexOf(areaStage.paso);
               return (
-                <button
-                  key={n}
-                  className={`substep ${stage.paso === n ? "on" : ""} ${stage.paso > n ? "past" : ""}`}
-                  onClick={() => go(target)}
-                  aria-current={stage.paso === n ? "step" : undefined}
-                >
-                  <span className="step-n">{n}</span>
-                  {STEP_META[n].titulo}
+                <button key={String(n)} className={`substep ${areaStage.paso === n ? 'on' : ''} ${current > i ? 'past' : ''}`} onClick={() => go(target)} aria-current={areaStage.paso === n ? 'step' : undefined}>
+                  <span className="step-n">{n === 'registro' ? '✎' : n}</span>
+                  {AREA_STEP_LABELS[n]}
                 </button>
               );
             })}
           </nav>
         )}
+        <LiveStatus data={data} />
       </div>
 
       <main className="meeting-body" id="main">
         <div className="meeting-title">
-          <p className="eyebrow">{title.eyebrow}</p>
-          <h1>{title.h1}</h1>
+          <p className="eyebrow">{header.eyebrow}</p>
+          <h1>{header.h1}</h1>
         </div>
-        {stage.key === "metodologia" && <MethodologySheet areas={areas} />}
-        {stage.key === "proyectos" && (
-          <ProjectsByArea areas={areas} data={data} />
-        )}
-        {area && areaData && isAreaStage(stage) && stage.paso === 3 && (
-          <Step3Order data={areaData} />
-        )}
-        {area && areaData && isAreaStage(stage) && stage.paso === 4 && (
-          <Step4Prioritize key={area.id} session={session} data={areaData} />
-        )}
-        {area && areaData && isAreaStage(stage) && stage.paso === 5 && (
-          <Step5Detect
-            key={area.id}
-            session={session}
-            data={areaData}
-            includeAllP3
-          />
-        )}
-        {area && areaData && isAreaStage(stage) && stage.paso === 6 && (
-          <Step6Unblock session={session} data={areaData} />
-        )}
-        {area && areaData && isAreaStage(stage) && stage.paso === 7 && (
-          <AreaClose
-            area={area}
-            session={session}
-            data={areaData}
-            nextLabel={nextLabel ?? ""}
-            onNext={() => go(idx + 1)}
-          />
-        )}
-        {stage.key === "cierre" && (
-          <GeneralClose session={session} data={data} areas={areas} />
-        )}
+        {stage.key === 'metodologia' && <MethodologySheet areas={areas} />}
+        {area && areaData && areaStage?.paso === 'registro' && <AreaRegistro area={area} data={areaData} />}
+        {area && areaData && areaStage?.paso === 2 && <Step2Visibilize session={session} data={areaData} areaId={area.id} />}
+        {area && areaData && areaStage?.paso === 3 && <Step3Order data={areaData} />}
+        {area && areaData && areaStage?.paso === 4 && <Step4Prioritize key={area.id} session={session} data={areaData} />}
+        {area && areaData && areaStage?.paso === 5 && <Step5Detect key={area.id} session={session} data={areaData} includeAllP3 />}
+        {area && areaData && areaStage?.paso === 6 && <Step6Unblock session={session} data={areaData} />}
+        {area && areaData && areaStage?.paso === 7 && <AreaClose area={area} session={session} data={areaData} nextLabel={nextLabel ?? ''} onNext={() => go(idx + 1)} />}
+        {stage.key === 'cierre' && <FinalSummary session={session} data={data} areas={areas} />}
       </main>
 
       <footer className="meeting-foot">
-        <button
-          className="btn btn-secondary btn-lg"
-          disabled={idx === 0}
-          onClick={() => go(idx - 1)}
-        >
-          <ArrowLeft size={18} aria-hidden /> {prevLabel ?? "Anterior"}
+        <button className="btn btn-secondary btn-lg" disabled={idx === 0} onClick={() => go(idx - 1)}>
+          <ArrowLeft size={18} aria-hidden /> {idx > 0 ? stageLabel(idx - 1) : 'Anterior'}
         </button>
         <span className="muted small hide-md">
           Etapa {idx + 1} de {stages.length}
         </span>
         {nextLabel ? (
-          <button
-            className="btn btn-primary btn-lg"
-            onClick={() => go(idx + 1)}
-            data-testid="kickoff-next"
-          >
+          <button className="btn btn-primary btn-lg" onClick={() => go(idx + 1)} data-testid="kickoff-next">
             {nextLabel} <ArrowRight size={18} aria-hidden />
           </button>
         ) : (
@@ -354,32 +192,41 @@ export function KickoffFrame({
   );
 }
 
-function PhasePill({
-  label,
-  on,
-  past,
-  onClick,
-  dot,
-}: {
-  label: string;
-  on: boolean;
-  past: boolean;
-  onClick: () => void;
-  dot?: string;
-}) {
+function PhasePill({ label, on, past, onClick, dot }: { label: string; on: boolean; past: boolean; onClick: () => void; dot?: string }) {
   return (
-    <button
-      className={`step-pill ${on ? "on" : ""} ${past ? "past" : ""}`}
-      onClick={onClick}
-      aria-current={on ? "step" : undefined}
-    >
-      {past ? (
-        <CheckCircle2 size={16} className="ok" aria-hidden />
-      ) : dot ? (
-        <span className="area-dot" style={{ background: dot }} aria-hidden />
-      ) : null}
+    <button className={`step-pill ${on ? 'on' : ''} ${past ? 'past' : ''}`} onClick={onClick} aria-current={on ? 'step' : undefined}>
+      {past ? <CheckCircle2 size={16} className="ok" aria-hidden /> : dot ? <span className="area-dot" style={{ background: dot }} aria-hidden /> : null}
       {label}
     </button>
+  );
+}
+
+/** Franja con los indicadores del dashboard: se actualiza con cada proyecto, bloqueo o compromiso guardado. */
+function LiveStatus({ data }: { data: WeekData }) {
+  const { now } = useApp();
+  const k = computeKpis(data, now);
+  return (
+    <div className="live-status" aria-live="polite" data-testid="live-status">
+      <span className="live-label">Dashboard en vivo</span>
+      <span>
+        <strong data-testid="live-projects">{k.proyectosActivos}</strong> proyectos
+      </span>
+      <span>
+        <PriorityBadge p="P1" /> <strong>{k.p1}</strong>
+      </span>
+      <span>
+        <PriorityBadge p="P2" /> <strong>{k.p2}</strong>
+      </span>
+      <span>
+        <PriorityBadge p="P3" /> <strong>{k.p3}</strong>
+      </span>
+      <span>
+        <strong>{k.bloqueados}</strong> bloqueados
+      </span>
+      <span>
+        <strong data-testid="live-commitments">{k.compromisosAbiertos}</strong> compromisos
+      </span>
+    </div>
   );
 }
 
@@ -391,10 +238,7 @@ function MethodologySheet({ areas }: { areas: Area[] }) {
       <section className="method-objective card">
         <h2>Objetivo</h2>
         <p>{METHOD_OBJECTIVE}</p>
-        <p className="method-cycle">
-          REVISAR → VISIBILIZAR → ORDENAR → PRIORIZAR → DETECTAR → DESTRABAR →
-          COMPROMETER → CERRAR → DAR SEGUIMIENTO
-        </p>
+        <p className="method-cycle">REVISAR → VISIBILIZAR → ORDENAR → PRIORIZAR → DETECTAR → DESTRABAR → COMPROMETER → CERRAR → DAR SEGUIMIENTO</p>
       </section>
 
       <section className="method-agenda card">
@@ -404,31 +248,18 @@ function MethodologySheet({ areas }: { areas: Area[] }) {
             <strong>Metodología</strong> · cómo vamos a trabajar (esta hoja).
           </li>
           <li>
-            <strong>Proyectos por área</strong> · cada área enlista sus
-            proyectos principales (máximo{" "}
-            {settings.criteria.maxProyectosPorArea} recomendados).
+            <strong>Un área a la vez</strong> · {areas.map((a) => a.nombre).join(' → ')}. Cada área registra sus proyectos (máximo {settings.criteria.maxProyectosPorArea} recomendados) y recorre los pasos 2 a 7: Visibilizar, Ordenar, Priorizar, Detectar, Destrabar y comprometer, y Cerrar. Al cerrar un área pasamos a la siguiente.
           </li>
           <li>
-            <strong>Área por área, pasos 3 a 7</strong> ·{" "}
-            {areas.map((a) => a.nombre).join(" → ")}.
-          </li>
-          <li>
-            <strong>Cierre general</strong> · prioridades, bloqueos, decisiones
-            y compromisos; resumen para Teams.
+            <strong>Resumen final</strong> · proyectos, acuerdos y estatus de todas las áreas; resumen para Teams.
           </li>
         </ol>
-        <p className="small muted">
-          A partir de la siguiente semana, la Weekly recorre los 7 pasos con
-          todas las áreas a la vez y empieza revisando estos compromisos.
-        </p>
+        <p className="small muted">A partir de la siguiente semana, la Weekly recorre los 7 pasos con todas las áreas a la vez y empieza revisando los compromisos de hoy (paso 1).</p>
       </section>
 
       <section className="method-steps" aria-label="Los 7 pasos">
         {METHOD_STEPS.map((s) => (
-          <article
-            key={s.n}
-            className={`method-step card ${"hoy" in s ? "muted-step" : ""}`}
-          >
+          <article key={s.n} className={`method-step card ${'hoy' in s ? 'muted-step' : ''}`}>
             <header>
               <span className="step-n">{s.n}</span>
               <div>
@@ -442,7 +273,7 @@ function MethodologySheet({ areas }: { areas: Area[] }) {
               <dt>Resultado</dt>
               <dd>{s.resultado}</dd>
             </dl>
-            {"hoy" in s && <p className="method-today">{s.hoy}</p>}
+            {'hoy' in s && <p className="method-today">{s.hoy}</p>}
           </article>
         ))}
       </section>
@@ -450,10 +281,7 @@ function MethodologySheet({ areas }: { areas: Area[] }) {
       <div className="method-two">
         <section className="card section">
           <h2>Ponderación</h2>
-          <p className="small muted">
-            Score = Impacto + Urgencia + Dependencia · 8–9 → P1 · 6–7 → P2 · 3–5
-            → P3
-          </p>
+          <p className="small muted">Score = Impacto + Urgencia + Dependencia · 8–9 → P1 · 6–7 → P2 · 3–5 → P3</p>
           <div className="table-wrap">
             <table className="table">
               <thead>
@@ -467,9 +295,9 @@ function MethodologySheet({ areas }: { areas: Area[] }) {
               <tbody>
                 {(
                   [
-                    ["Impacto", IMPACT_LABELS],
-                    ["Urgencia", URGENCY_LABELS],
-                    ["Dependencia", DEPENDENCY_LABELS],
+                    ['Impacto', IMPACT_LABELS],
+                    ['Urgencia', URGENCY_LABELS],
+                    ['Dependencia', DEPENDENCY_LABELS],
                   ] as const
                 ).map(([c, l]) => (
                   <tr key={c}>
@@ -508,153 +336,39 @@ function MethodologySheet({ areas }: { areas: Area[] }) {
   );
 }
 
-/* ───────── PROYECTOS POR ÁREA ───────── */
-function ProjectsByArea({ areas, data }: { areas: Area[]; data: WeekData }) {
+/* ───────── REGISTRO DE PROYECTOS DEL ÁREA ───────── */
+function AreaRegistro({ area, data }: { area: Area; data: WeekData }) {
   const db = useDb();
   const services = useServices();
   const settings = useSettings();
   const modals = useModals();
   const { toast, confirm } = useFeedback();
-  const [areaId, setAreaId] = useState(areas[0]?.id ?? "");
-  const [f, setF] = useState({
-    nombre: "",
-    responsable: "",
-    fechaObjetivo: "",
-  });
-  const [error, setError] = useState<string>();
-  const nameRef = useRef<HTMLInputElement>(null);
-  const area = areas.find((a) => a.id === areaId) ?? areas[0];
-  const list = data.projects
-    .filter((p) => p.areaId === area?.id && isActiveProject(p))
-    .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  const list = data.projects.filter(isActiveProject).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   const max = settings.criteria.maxProyectosPorArea;
 
-  const add = (e: FormEvent) => {
-    e.preventDefault();
-    try {
-      services.projects.create(
-        {
-          nombre: f.nombre,
-          areaId: area.id,
-          responsable: f.responsable || undefined,
-          fechaObjetivo: f.fechaObjetivo || undefined,
-          impacto: 2,
-          urgencia: 2,
-          dependencia: 2,
-        },
-        { origen: "junta" },
-      );
-      setF((x) => ({ ...x, nombre: "", fechaObjetivo: "" }));
-      setError(undefined);
-      nameRef.current?.focus();
-    } catch (err) {
-      setError(
-        err instanceof ValidationError ? err.message : friendlyError(err),
-      );
-    }
-  };
-
   const remove = async (id: string, nombre: string) => {
-    const ok = await confirm({
-      title: "Quitar proyecto",
-      message: `¿Quitar «${nombre}» de la lista?`,
-      confirmLabel: "Quitar",
-      danger: true,
-    });
+    const ok = await confirm({ title: 'Quitar proyecto', message: `¿Quitar «${nombre}» de ${area.nombre}?`, confirmLabel: 'Quitar', danger: true });
     if (!ok) return;
     services.projects.remove(id);
-    toast("Proyecto quitado");
+    toast('Proyecto quitado');
   };
 
-  if (!area) return <EmptyState title="No hay áreas activas" />;
   return (
     <div className="step capture">
       <p className="step-lead">
-        Proyectos, no actividades. Escribe el nombre y presiona <kbd>Enter</kbd>
-        ; la ponderación se hace en el paso 4.
+        Proyectos de <strong>{area.nombre}</strong>, no actividades. Cada proyecto guardado aparece de inmediato en el dashboard, en Proyectos y en el tablero del área.
       </p>
-      <div className="area-tabs" role="tablist" aria-label="Área">
-        {areas.map((a) => {
-          const n = data.projects.filter(
-            (p) => p.areaId === a.id && isActiveProject(p),
-          ).length;
-          return (
-            <button
-              key={a.id}
-              role="tab"
-              aria-selected={a.id === area.id}
-              className={`area-tab ${a.id === area.id ? "on" : ""}`}
-              onClick={() => setAreaId(a.id)}
-            >
-              <span
-                className="area-dot"
-                style={{ background: a.color }}
-                aria-hidden
-              />
-              {a.nombre}
-              <span className="count-pill">{n}</span>
-            </button>
-          );
-        })}
-      </div>
-
-      <form
-        className="capture-form card"
-        onSubmit={add}
-        aria-label={`Agregar proyecto a ${area.nombre}`}
-      >
-        <label className="field grow">
-          <span className="field-label">Proyecto de {area.nombre}</span>
-          <input
-            ref={nameRef}
-            className="input input-lg"
-            value={f.nombre}
-            onChange={(e) => setF({ ...f, nombre: e.target.value })}
-            placeholder="Ej. Campaña Convención"
-            aria-invalid={!!error}
-            autoFocus
-            data-testid="capture-name"
-          />
-        </label>
-        <div className="capture-person">
-          <PersonSelect
-            label="Responsable"
-            value={f.responsable}
-            onValue={(v) => setF({ ...f, responsable: v })}
-            areaHint={area.id}
-          />
-        </div>
-        <label className="field">
-          <span className="field-label">Fecha objetivo</span>
-          <input
-            className="input"
-            type="date"
-            value={f.fechaObjetivo}
-            onChange={(e) => setF({ ...f, fechaObjetivo: e.target.value })}
-          />
-        </label>
-        <button className="btn btn-primary btn-lg" type="submit">
-          <Plus size={18} aria-hidden /> Agregar
-        </button>
-        {error && (
-          <p className="field-error capture-error" role="alert">
-            {error}
-          </p>
-        )}
-      </form>
-
+      <ProjectQuickForm areaId={area.id} areaName={area.nombre} origen="junta" />
       {list.length > max && (
         <p className="alert alert-yellow">
-          <AlertTriangle size={18} aria-hidden /> {area.nombre} tiene{" "}
-          {list.length} proyectos. ¿Todos necesitan foco? Recomendación: máximo{" "}
-          {max}.
+          <AlertTriangle size={18} aria-hidden /> {area.nombre} tiene {list.length} proyectos. ¿Todos necesitan foco? Recomendación: máximo {max}.
         </p>
       )}
-
+      <h2 className="capture-title">
+        Proyectos registrados de {area.nombre} <span className="count-pill">{list.length}</span>
+      </h2>
       {list.length === 0 ? (
-        <EmptyState title={`${area.nombre} aún no tiene proyectos`}>
-          Agrega sus proyectos principales en el campo de arriba.
-        </EmptyState>
+        <EmptyState title={`${area.nombre} aún no tiene proyectos`}>Usa el formulario de arriba y presiona «Guardar proyecto».</EmptyState>
       ) : (
         <ol className="capture-list" data-testid="capture-list">
           {list.map((p) => (
@@ -665,107 +379,49 @@ function ProjectsByArea({ areas, data }: { areas: Area[]; data: WeekData }) {
                 <span className="small muted">
                   {personName(db.people, p.responsable)}
                   {p.fechaObjetivo && ` · objetivo ${fmtDate(p.fechaObjetivo)}`}
+                  {p.dependeDe && ` · depende de ${dependencyLabel(db, p.dependeDe)}`}
                 </span>
               </div>
-              <button
-                className="btn btn-ghost btn-sm"
-                onClick={() =>
-                  modals.open({
-                    type: "project",
-                    projectId: p.id,
-                    origen: "junta",
-                  })
-                }
-                aria-label={`Editar ${p.nombre}`}
-              >
+              <ProjectStatusChip status={p.estado} />
+              {p.bloqueado && <BlockedChip />}
+              <button className="btn btn-ghost btn-sm" onClick={() => modals.open({ type: 'project', projectId: p.id, origen: 'junta' })} aria-label={`Editar ${p.nombre}`}>
                 <Pencil size={15} aria-hidden />
               </button>
-              <button
-                className="btn btn-ghost btn-sm"
-                onClick={() => void remove(p.id, p.nombre)}
-                aria-label={`Quitar ${p.nombre}`}
-              >
+              <button className="btn btn-ghost btn-sm" onClick={() => void remove(p.id, p.nombre)} aria-label={`Quitar ${p.nombre}`}>
                 <Trash2 size={15} aria-hidden />
               </button>
             </li>
           ))}
         </ol>
       )}
-
-      <section className="capture-summary" aria-label="Resumen por área">
-        {areas.map((a) => {
-          const n = data.projects.filter(
-            (p) => p.areaId === a.id && isActiveProject(p),
-          ).length;
-          return (
-            <div key={a.id} className={`capture-sum ${n ? "ok" : "warn"}`}>
-              <AreaDot color={a.color} name={a.nombre} />
-              <strong>{n}</strong>
-            </div>
-          );
-        })}
-      </section>
     </div>
   );
 }
 
 /* ───────── PASO 7 POR ÁREA ───────── */
-function AreaClose({
-  area,
-  session,
-  data,
-  nextLabel,
-  onNext,
-}: {
-  area: Area;
-  session: Session;
-  data: WeekData;
-  nextLabel: string;
-  onNext: () => void;
-}) {
+function AreaClose({ area, session, data, nextLabel, onNext }: { area: Area; session: Session; data: WeekData; nextLabel: string; onNext: () => void }) {
   const db = useDb();
   const { now } = useApp();
   const modals = useModals();
   const { confirm } = useFeedback();
   const issues = closingIssues(db, data, session);
-  const active = data.projects
-    .filter(isActiveProject)
-    .sort(sortProjectsByPriority);
+  const active = data.projects.filter(isActiveProject).sort(sortProjectsByPriority);
   const blocks = data.blocks.filter(isBlockOpen);
-  const commitments = data.commitments
-    .filter(isOpenCommitment)
-    .sort(sortByDeadline);
-  const counts = {
-    P1: active.filter((p) => p.prioridadFinal === "P1").length,
-    P2: active.filter((p) => p.prioridadFinal === "P2").length,
-    P3: active.filter((p) => p.prioridadFinal === "P3").length,
-  };
+  const commitments = data.commitments.filter(isOpenCommitment).sort(sortByDeadline);
+  const counts = { P1: active.filter((p) => p.prioridadFinal === 'P1').length, P2: active.filter((p) => p.prioridadFinal === 'P2').length, P3: active.filter((p) => p.prioridadFinal === 'P3').length };
 
   const fix = (i: ClosingIssue) => {
-    if (i.kind === "bloqueo_sin_accion" && i.blockId)
-      modals.open({
-        type: "block",
-        blockId: i.blockId,
-        sessionId: session.id,
-        origen: "junta",
-      });
-    else if (i.kind === "tema_sin_decision")
-      modals.open({
-        type: "decision",
-        projectId: i.projectId,
-        sessionId: session.id,
-      });
-    else if (i.projectId)
-      modals.open({ type: "project", projectId: i.projectId, origen: "junta" });
+    if (i.kind === 'bloqueo_sin_accion' && i.blockId) modals.open({ type: 'block', blockId: i.blockId, sessionId: session.id, origen: 'junta' });
+    else if (i.kind === 'tema_sin_decision') modals.open({ type: 'decision', projectId: i.projectId, sessionId: session.id });
+    else if (i.projectId) modals.open({ type: 'project', projectId: i.projectId, origen: 'junta' });
   };
 
   const next = async () => {
     if (issues.length) {
       const ok = await confirm({
-        title: `${area.nombre}: ${issues.length} tema${issues.length === 1 ? "" : "s"} sin definir`,
-        message:
-          "Puedes resolverlos ahora o continuar; quedarán en el cierre general.",
-        confirmLabel: "Continuar de todos modos",
+        title: `${area.nombre}: ${issues.length} tema${issues.length === 1 ? '' : 's'} sin definir`,
+        message: 'Puedes resolverlos ahora o continuar; quedarán señalados en el resumen final.',
+        confirmLabel: 'Continuar de todos modos',
       });
       if (!ok) return;
     }
@@ -774,21 +430,16 @@ function AreaClose({
 
   return (
     <div className="step close-step">
-      <div
-        className={`closing-status ${issues.length ? "warn" : "ok"}`}
-        data-testid="area-closing-status"
-      >
+      <div className={`closing-status ${issues.length ? 'warn' : 'ok'}`} data-testid="area-closing-status">
         {issues.length === 0 ? (
           <>
-            <CheckCircle2 size={28} aria-hidden />{" "}
-            <strong>✓ {area.nombre.toUpperCase()}: TODO CLARO</strong>
+            <CheckCircle2 size={28} aria-hidden /> <strong>✓ {area.nombre.toUpperCase()}: TODO CLARO</strong>
           </>
         ) : (
           <>
-            <AlertTriangle size={28} aria-hidden />{" "}
+            <AlertTriangle size={28} aria-hidden />{' '}
             <strong>
-              ⚠ {issues.length} TEMA{issues.length === 1 ? "" : "S"} REQUIERE
-              {issues.length === 1 ? "" : "N"} DEFINICIÓN
+              ⚠ {issues.length} TEMA{issues.length === 1 ? '' : 'S'} REQUIERE{issues.length === 1 ? '' : 'N'} DEFINICIÓN
             </strong>
           </>
         )}
@@ -798,10 +449,7 @@ function AreaClose({
           {issues.map((i, n) => (
             <li key={n}>
               <AlertTriangle size={16} aria-hidden /> <span>{i.message}</span>
-              <button
-                className="btn btn-sm btn-secondary"
-                onClick={() => fix(i)}
-              >
+              <button className="btn btn-sm btn-secondary" onClick={() => fix(i)}>
                 Resolver
               </button>
             </li>
@@ -818,14 +466,9 @@ function AreaClose({
           <ul className="plain-list">
             {active.map((p) => (
               <li key={p.id} className="row gap wrap">
-                <PriorityBadge
-                  p={p.prioridadFinal}
-                  override={p.ajusteDireccion}
-                />
+                <PriorityBadge p={p.prioridadFinal} override={p.ajusteDireccion} />
                 <strong>{p.nombre}</strong>
-                <span className="small muted">
-                  {personName(db.people, p.responsable)}
-                </span>
+                <span className="small muted">{personName(db.people, p.responsable)}</span>
                 {p.bloqueado && <BlockedChip />}
               </li>
             ))}
@@ -837,16 +480,9 @@ function AreaClose({
           <ul className="plain-list">
             {blocks.map((b) => (
               <li key={b.id}>
-                <strong>
-                  {db.projects.find((p) => p.id === b.projectId)?.nombre}
-                </strong>{" "}
-                — {b.descripcion}
-                <span className="small muted block">
-                  Depende de {dependencyLabel(db, b.areaDependencia)}
-                </span>
-                {!blockIsManaged(b, data.commitments) && (
-                  <Chip tone="red">sin compromiso</Chip>
-                )}
+                <strong>{db.projects.find((p) => p.id === b.projectId)?.nombre}</strong> — {b.descripcion}
+                <span className="small muted block">Depende de {dependencyLabel(db, b.areaDependencia)}</span>
+                {!blockIsManaged(b, data.commitments) && <Chip tone="red">sin compromiso</Chip>}
               </li>
             ))}
             {blocks.length === 0 && <li className="muted">Sin bloqueos.</li>}
@@ -858,9 +494,7 @@ function AreaClose({
             {data.decisions.map((d) => (
               <li key={d.id}>{d.descripcion}</li>
             ))}
-            {data.decisions.length === 0 && (
-              <li className="muted">Sin decisiones.</li>
-            )}
+            {data.decisions.length === 0 && <li className="muted">Sin decisiones.</li>}
           </ul>
         </section>
       </div>
@@ -887,9 +521,7 @@ function AreaClose({
               <tbody>
                 {commitments.map((c) => (
                   <tr key={c.id}>
-                    <td>
-                      {db.projects.find((p) => p.id === c.projectId)?.nombre}
-                    </td>
+                    <td>{db.projects.find((p) => p.id === c.projectId)?.nombre}</td>
                     <td>
                       <strong>{c.accion}</strong>
                     </td>
@@ -897,9 +529,7 @@ function AreaClose({
                     <td>{c.fecha}</td>
                     <td>{c.hora}</td>
                     <td>
-                      <CommitmentStatusChip
-                        status={commitmentDisplayStatus(c, now)}
-                      />
+                      <CommitmentStatusChip status={commitmentDisplayStatus(c, now)} />
                     </td>
                   </tr>
                 ))}
@@ -910,11 +540,7 @@ function AreaClose({
       </section>
 
       <div className="close-actions">
-        <button
-          className="btn btn-primary btn-xl"
-          onClick={() => void next()}
-          data-testid="close-area"
-        >
+        <button className="btn btn-primary btn-xl" onClick={() => void next()} data-testid="close-area">
           <Flag size={20} aria-hidden /> {nextLabel}
         </button>
       </div>
@@ -922,43 +548,129 @@ function AreaClose({
   );
 }
 
-/* ───────── CIERRE GENERAL ───────── */
-function GeneralClose({
-  session,
-  data,
-  areas,
-}: {
-  session: Session;
-  data: WeekData;
-  areas: Area[];
-}) {
+/* ───────── RESUMEN FINAL: proyectos, acuerdos y estatus ───────── */
+function FinalSummary({ session, data, areas }: { session: Session; data: WeekData; areas: Area[] }) {
+  const db = useDb();
+  const { now } = useApp();
   const closed = new Set(session.areasCerradas ?? []);
   const pending = areas.filter((a) => !closed.has(a.id));
+  const k = computeKpis(data, now);
+  const commitments = data.commitments.filter(isOpenCommitment).sort(sortByDeadline);
+
   return (
-    <div className="step">
-      <div className="capture-summary" aria-label="Áreas">
-        {areas.map((a) => (
-          <div
-            key={a.id}
-            className={`capture-sum ${closed.has(a.id) ? "ok" : "warn"}`}
-          >
-            <AreaDot color={a.color} name={a.nombre} />
-            <span className="small">
-              {closed.has(a.id) ? "✓ cerrada" : "⚠ sin cerrar"}
-            </span>
-          </div>
-        ))}
-      </div>
+    <div className="step final-summary" data-testid="final-summary">
+      <section className="final-kpis card" aria-label="Estatus general">
+        <div>
+          <span>Proyectos</span>
+          <strong>{k.proyectosActivos}</strong>
+        </div>
+        <div>
+          <span>P1 · P2 · P3</span>
+          <strong>
+            {k.p1} · {k.p2} · {k.p3}
+          </strong>
+        </div>
+        <div>
+          <span>Bloqueados</span>
+          <strong className={k.bloqueados ? 'red' : ''}>{k.bloqueados}</strong>
+        </div>
+        <div>
+          <span>Compromisos</span>
+          <strong>{k.compromisosAbiertos}</strong>
+        </div>
+        <div>
+          <span>Decisiones</span>
+          <strong>{data.decisions.length}</strong>
+        </div>
+        <div>
+          <span>Áreas cerradas</span>
+          <strong>
+            {closed.size} de {areas.length}
+          </strong>
+        </div>
+      </section>
       {pending.length > 0 && (
         <p className="alert alert-yellow">
-          <AlertTriangle size={18} aria-hidden /> Falta recorrer los pasos 3–7
-          de: {pending.map((a) => a.nombre).join(", ")}.
+          <AlertTriangle size={18} aria-hidden /> Falta cerrar: {pending.map((a) => a.nombre).join(', ')}.
         </p>
       )}
+
+      {areas.map((a) => {
+        const slice = sliceByArea(data, a.id);
+        const projects = slice.projects.filter(isActiveProject).sort(sortProjectsByPriority);
+        return (
+          <section key={a.id} className="card section final-area" aria-label={a.nombre} data-testid="final-area">
+            <div className="section-head">
+              <h2>
+                <AreaDot color={a.color} name={a.nombre} />
+              </h2>
+              <span className={`chip ${closed.has(a.id) ? 'chip-green' : 'chip-yellow'}`}>{closed.has(a.id) ? '✓ Cerrada' : '⚠ Sin cerrar'}</span>
+            </div>
+            {projects.length === 0 ? (
+              <p className="muted">Sin proyectos registrados.</p>
+            ) : (
+              <div className="table-wrap">
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th scope="col">Prioridad</th>
+                      <th scope="col">Proyecto</th>
+                      <th scope="col">Responsable</th>
+                      <th scope="col">Eisenhower</th>
+                      <th scope="col">Estatus</th>
+                      <th scope="col">Acuerdos</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {projects.map((p) => {
+                      const cs = slice.commitments.filter((c) => c.projectId === p.id && isOpenCommitment(c)).sort(sortByDeadline);
+                      const ds = slice.decisions.filter((d) => d.projectId === p.id);
+                      return (
+                        <tr key={p.id}>
+                          <td>
+                            <PriorityBadge p={p.prioridadFinal} override={p.ajusteDireccion} />
+                          </td>
+                          <td>
+                            <strong>{p.nombre}</strong>
+                            <span className="small muted block">score {p.score}</span>
+                          </td>
+                          <td>{personName(db.people, p.responsable)}</td>
+                          <td>
+                            <QuadrantChip q={p.eisenhower} />
+                          </td>
+                          <td>
+                            <div className="row gap wrap">
+                              <ProjectStatusChip status={p.estado} />
+                              {p.bloqueado && <BlockedChip />}
+                            </div>
+                          </td>
+                          <td className="small">
+                            {cs.map((c) => (
+                              <span key={c.id} className="block">
+                                • {c.accion} — {personName(db.people, c.responsable)} · {fmtDeadline(c.fecha, c.hora, now)}
+                              </span>
+                            ))}
+                            {ds.map((d) => (
+                              <span key={d.id} className="block">
+                                ◆ {d.descripcion}
+                              </span>
+                            ))}
+                            {cs.length + ds.length === 0 && <span className="muted">—</span>}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+        );
+      })}
+
+      {commitments.length === 0 && <p className="muted">Aún no hay compromisos registrados.</p>}
       <Question>¿Con qué salimos de la Sesión 1?</Question>
       <Step7Close session={session} data={data} />
     </div>
   );
 }
-
-export type { KickoffStage };

@@ -2032,3 +2032,139 @@ kbd {
   border-color: transparent;
   color: #fff;
 }
+.visibilize.single ul {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 10px;
+}
+
+.live-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 18px;
+  padding: 7px 28px;
+  background: #fff;
+  border-bottom: 1px solid var(--line);
+  font-size: 0.85em;
+  color: var(--text-2);
+}
+.live-status strong {
+  color: var(--text);
+}
+.live-status span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.live-label {
+  font-size: 0.78em;
+  font-weight: 750;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--brand) !important;
+}
+.live-label::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--lime);
+  display: inline-block;
+}
+
+.quick-form {
+  padding: 18px;
+  display: grid;
+  gap: 14px;
+}
+.quick-grid {
+  display: grid;
+  grid-template-columns: 2fr 1.2fr 1fr;
+  gap: 12px 14px;
+  align-items: start;
+}
+.quick-grid > * {
+  min-width: 0;
+}
+.quick-name .input {
+  min-height: 46px;
+  font-size: 1.05em;
+}
+.quick-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px 18px;
+}
+.quick-block {
+  flex: 1 1 280px;
+}
+.quick-note {
+  margin-left: auto;
+}
+.capture-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 1.05em;
+}
+.final-kpis {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 10px;
+  padding: 16px;
+}
+.final-kpis div {
+  display: grid;
+  gap: 2px;
+}
+.final-kpis span {
+  font-size: 0.78em;
+  color: var(--text-2);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 650;
+}
+.final-kpis strong {
+  font-size: 1.6em;
+}
+.final-area .section-head h2 {
+  font-size: 1.15em;
+}
+.area-register {
+  display: grid;
+  gap: 10px;
+}
+@media (max-width: 1100px) {
+  .quick-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  .final-kpis {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@media (max-width: 720px) {
+  .quick-grid {
+    grid-template-columns: 1fr;
+  }
+  .quick-note {
+    margin-left: 0;
+  }
+  .live-status {
+    padding: 7px 16px;
+  }
+  .final-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.area-register > summary {
+  list-style: none;
+  justify-self: start;
+}
+.area-register > summary::-webkit-details-marker {
+  display: none;
+}
+.area-register[open] > summary {
+  margin-bottom: 10px;
+}

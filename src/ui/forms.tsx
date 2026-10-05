@@ -1,4 +1,4 @@
-import { useId, useState, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from 'react';
+import { useId, useState, type Ref, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from 'react';
 import { LEVELS } from '../domain/constants';
 import type { Level, Role } from '../domain/types';
 import { useDb, useServices, useSettings } from '../state/app';
@@ -40,6 +40,7 @@ export function Field({ label, hint, error, required, children, className }: Fie
 }
 
 type InputProps = Omit<InputHTMLAttributes<HTMLInputElement>, 'onChange'> & {
+  ref?: Ref<HTMLInputElement>;
   label: ReactNode;
   hint?: ReactNode;
   error?: string;

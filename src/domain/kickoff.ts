@@ -1,29 +1,36 @@
 import type { Area } from './types';
 
 /**
- * Sesión 1 · Arranque: secuencia de etapas.
- *   metodologia → proyectos → (por área) pasos 3, 4, 5, 6, 7 → cierre
- * Cada etapa se identifica con una clave: 'metodologia', 'proyectos',
- * '<areaId>:<paso>' o 'cierre'.
+ * Sesión 1 · Arranque: secuencia de etapas, un área a la vez.
+ *   metodologia
+ *   → Contenido: registro → 2 Visibilizar → 3 Ordenar → 4 Priorizar → 5 Detectar → 6 Destrabar → 7 Cerrar
+ *   → Diseño (mismos pasos) → Marketing Digital → SOC Store
+ *   → cierre (resumen de proyectos, acuerdos y estatus)
+ * Claves: 'metodologia', '<areaId>:<paso>' (paso = 'registro' | 2…7) o 'cierre'.
  */
-export const KICKOFF_AREA_STEPS = [3, 4, 5, 6, 7] as const;
+export const KICKOFF_AREA_STEPS = ['registro', 2, 3, 4, 5, 6, 7] as const;
 export type KickoffAreaStep = (typeof KICKOFF_AREA_STEPS)[number];
 
-export type KickoffStage =
-  | { key: 'metodologia' }
-  | { key: 'proyectos' }
-  | { key: string; areaId: string; paso: KickoffAreaStep }
-  | { key: 'cierre' };
+export type KickoffStage = { key: 'metodologia' } | { key: string; areaId: string; paso: KickoffAreaStep } | { key: 'cierre' };
 
 export function kickoffStages(areas: Area[]): KickoffStage[] {
   const ordered = areas.filter((a) => a.activo).sort((a, b) => a.orden - b.orden);
   return [
     { key: 'metodologia' },
-    { key: 'proyectos' },
     ...ordered.flatMap((a) => KICKOFF_AREA_STEPS.map((paso) => ({ key: `${a.id}:${paso}`, areaId: a.id, paso }))),
     { key: 'cierre' },
   ];
 }
+
+export const AREA_STEP_LABELS: Record<KickoffAreaStep, string> = {
+  registro: 'Registro de proyectos',
+  2: 'Visibilizar',
+  3: 'Ordenar',
+  4: 'Priorizar',
+  5: 'Detectar',
+  6: 'Destrabar y comprometer',
+  7: 'Cerrar',
+};
 
 export function stageIndex(stages: KickoffStage[], key: string | undefined): number {
   const i = stages.findIndex((s) => s.key === key);
@@ -53,7 +60,6 @@ export const METHOD_STEPS = [
     pregunta: '¿En qué estamos?',
     objetivo: 'Ver en una sola pantalla los proyectos principales de cada área.',
     resultado: 'Máximo 5 proyectos relevantes por área a la vista de todos.',
-    hoy: 'Hoy se sustituye por el levantamiento de proyectos por área.',
   },
   {
     n: 3,

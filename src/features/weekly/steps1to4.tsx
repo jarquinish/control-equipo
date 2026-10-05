@@ -91,13 +91,13 @@ export function Step1Review({ session }: StepProps) {
 }
 
 /* ───────── PASO 2 · VISIBILIZAR ───────── */
-export function Step2Visibilize({ session, data }: StepProps) {
+export function Step2Visibilize({ session, data, areaId }: StepProps & { areaId?: string }) {
   const db = useDb();
   const settings = useSettings();
   const modals = useModals();
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const max = settings.criteria.maxProyectosPorArea;
-  const areas = db.areas.filter((a) => a.activo).sort((a, b) => a.orden - b.orden);
+  const areas = db.areas.filter((a) => a.activo && (!areaId || a.id === areaId)).sort((a, b) => a.orden - b.orden);
   const tooMany = areas.some((a) => data.projects.filter((p) => p.areaId === a.id && isActiveProject(p)).length > max);
 
   return (
@@ -107,10 +107,10 @@ export function Step2Visibilize({ session, data }: StepProps) {
           <AlertTriangle size={20} aria-hidden /> Tenemos demasiados proyectos activos. ¿Todos necesitan foco esta semana?
         </p>
       )}
-      <div className="visibilize">
+      <div className={`visibilize ${areaId ? 'single' : ''}`}>
         {areas.map((a) => {
           const list = data.projects.filter((p) => p.areaId === a.id && isActiveProject(p)).sort(sortProjectsByPriority);
-          const shown = expanded[a.id] ? list : list.slice(0, max);
+          const shown = expanded[a.id] || areaId ? list : list.slice(0, max);
           const up = areaUpdateFor(data, a.id);
           return (
             <section key={a.id} className="vis-col card" aria-label={a.nombre}>
@@ -137,7 +137,7 @@ export function Step2Visibilize({ session, data }: StepProps) {
                 ))}
                 {list.length === 0 && <li className="muted small">Sin proyectos activos</li>}
               </ul>
-              {list.length > max && (
+              {list.length > max && !areaId && (
                 <button className="btn btn-ghost btn-sm" onClick={() => setExpanded((e) => ({ ...e, [a.id]: !e[a.id] }))}>
                   {expanded[a.id] ? 'Ver menos' : `Ver ${list.length - max} más`}
                 </button>
