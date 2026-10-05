@@ -8,6 +8,8 @@ interface ImportMetaEnv {
   readonly VITE_SUPABASE_MICROSOFT?: string;
   readonly VITE_ROUTER?: 'history' | 'hash';
   readonly VITE_PREVIEW?: string;
+  readonly VITE_NO_DEMO?: string;
+  readonly VITE_DB_PREFIX?: string;
 }
 
 interface ImportMeta {

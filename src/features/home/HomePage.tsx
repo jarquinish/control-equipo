@@ -20,6 +20,7 @@ import { areaUpdateFor, dependencyLabel } from '../../domain/selectors';
 import { RULES } from '../../domain/constants';
 import { useApp, useCurrentUser, useDb, useServices, useSettings, useWeekData } from '../../state/app';
 import { Link, navigate } from '../../state/router';
+import { demoEnabled } from '../../state/workspace';
 import { AreaDot, BlockedChip, Chip, PriorityBadge } from '../../ui/badges';
 import { EmptyState, KpiCard, Section } from '../../ui/common';
 import { useFeedback } from '../../ui/feedback';
@@ -143,7 +144,7 @@ export function HomePage() {
                 <button className="btn btn-primary" onClick={() => modals.open({ type: 'project' })}>
                   <Plus size={16} aria-hidden /> Registrar primer proyecto
                 </button>
-                {workspace !== 'demo' && (
+                {workspace !== 'demo' && demoEnabled() && (
                   <button className="btn btn-secondary" onClick={() => switchWorkspace('demo')}>
                     <FlaskConical size={16} aria-hidden /> Explorar con datos demo
                   </button>

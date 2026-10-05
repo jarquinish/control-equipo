@@ -25,7 +25,16 @@ function safeGet(key: string): string | null {
   }
 }
 
+/** `VITE_NO_DEMO=true`: versión de trabajo sin datos de ejemplo ni opciones de demo. */
+export function demoEnabled(): boolean {
+  return import.meta.env.VITE_NO_DEMO !== 'true';
+}
+
+/** Prefijo de la base local (permite que una versión arranque en un espacio limpio). */
+const DB_PREFIX = import.meta.env.VITE_DB_PREFIX || 'alignment-unblock';
+
 export function getWorkspace(): Workspace {
+  if (!demoEnabled()) return 'principal';
   const saved = safeGet(KEY);
   if (saved === 'demo' || saved === 'principal') return saved;
   // La vista previa abre directamente con los datos demo.
@@ -47,11 +56,11 @@ export function createAdapter(ws: Workspace, auth?: AuthInfo | null): StorageAda
   if (mode === 'rest' && import.meta.env.VITE_API_URL && ws === 'principal') {
     return new RestAdapter({ baseUrl: import.meta.env.VITE_API_URL });
   }
-  if (typeof indexedDB !== 'undefined') return new IndexedDbAdapter(`alignment-unblock-${ws}`);
+  if (typeof indexedDB !== 'undefined') return new IndexedDbAdapter(`${DB_PREFIX}-${ws}`);
   try {
     localStorage.setItem('au.test', '1');
     localStorage.removeItem('au.test');
-    return new LocalStorageAdapter(`alignment-unblock-${ws}`);
+    return new LocalStorageAdapter(`${DB_PREFIX}-${ws}`);
   } catch {
     return new MemoryAdapter();
   }
@@ -62,7 +71,7 @@ export function fallbackAdapter(ws: Workspace): StorageAdapter {
   try {
     localStorage.setItem('au.test', '1');
     localStorage.removeItem('au.test');
-    return new LocalStorageAdapter(`alignment-unblock-${ws}`);
+    return new LocalStorageAdapter(`${DB_PREFIX}-${ws}`);
   } catch {
     return new MemoryAdapter();
   }
