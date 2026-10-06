@@ -1,0 +1,52 @@
+import { expect, test, type Page } from '@playwright/test';
+import { inventoryBook } from '../fixtures/inventory';
+
+async function login(page: Page, email: string) {
+  await page.goto('/');
+  await expect(page.getByRole('heading', { name: 'Iniciar sesión' })).toBeVisible();
+  await page.getByLabel('Correo').fill(email);
+  await page.getByRole('button', { name: 'Enviarme un código de acceso' }).click();
+  await page.getByLabel('Código').fill('123456');
+  await page.getByRole('button', { name: 'Entrar' }).click();
+  await expect(page.getByTestId('week-label')).toBeVisible();
+}
+
+async function importBook(page: Page, sheet: string) {
+  const dlg = page.getByRole('dialog');
+  await dlg.getByTestId('import-file').setInputFiles({ name: `Inventario_${sheet}.xlsx`, mimeType: 'application/octet-stream', buffer: Buffer.from(inventoryBook(sheet)) });
+  await expect(dlg.getByTestId('import-confirm')).toHaveText('Importar 4 proyectos · 3 compromisos');
+  await dlg.getByTestId('import-confirm').click();
+  await expect(page.getByText('Importado: 4 proyectos, 3 compromisos y 2 bloqueos')).toBeVisible();
+}
+
+test('plantilla de HubSpot: inicio de sesión, importación de Excel y datos compartidos en línea', async ({ browser }) => {
+  const errors: string[] = [];
+  const admin = await (await browser.newContext()).newPage();
+  admin.on('pageerror', (e) => errors.push(e.message));
+  await login(admin, 'admin@soc.test');
+
+  // Dirección importa el inventario de Contenido desde Configuración
+  await admin.goto('/#/configuracion');
+  await admin.getByTestId('open-import').click();
+  await importBook(admin, 'Contenido');
+  await admin.goto('/#/proyectos');
+  await expect(admin.getByTestId('project-row')).toHaveCount(4);
+
+  // Un gerente, en otro navegador, ve lo importado y sube el Excel de Diseño
+  const ger = await (await browser.newContext()).newPage();
+  ger.on('pageerror', (e) => errors.push(e.message));
+  await login(ger, 'gerente@soc.test');
+  await ger.goto('/#/proyectos');
+  await expect(ger.getByTestId('project-row')).toHaveCount(4);
+  await ger.goto('/#/actualizar');
+  await ger.getByRole('tab', { name: /Diseño/ }).click();
+  await ger.getByTestId('area-import').click();
+  await importBook(ger, 'Diseño');
+
+  // Dirección recarga: los datos están en el servidor, no en el navegador
+  await admin.reload();
+  await expect(admin.getByTestId('project-row')).toHaveCount(8);
+  await admin.goto('/#/');
+  await expect(admin.locator('.kpi', { hasText: 'Proyectos activos' })).toContainText('8');
+  expect(errors).toEqual([]);
+});

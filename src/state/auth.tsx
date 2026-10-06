@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import type { Session, SupabaseClient } from '@supabase/supabase-js';
 import { LogIn, Mail, ShieldAlert } from 'lucide-react';
-import { getSupabase, SUPABASE_MICROSOFT, supabaseEnabled } from '../data/supabase';
+import { getSupabase, SUPABASE_MICROSOFT, supabaseEnabled, supabaseRequired } from '../data/supabase';
 import type { Role } from '../domain/types';
 
 export interface Member {
@@ -34,13 +34,28 @@ type State =
   | { kind: 'error'; message: string }
   | { kind: 'ready'; auth: AuthInfo };
 
-const redirectTo = () => window.location.origin + (import.meta.env.BASE_URL ?? '/');
+/** Vuelve a la misma página (en modo hash, p. ej. una página de HubSpot, la ruta real es la del documento). */
+const redirectTo = () =>
+  import.meta.env.VITE_ROUTER === 'hash' ? window.location.origin + window.location.pathname : window.location.origin + (import.meta.env.BASE_URL ?? '/');
 
 /**
  * Puerta de acceso: en modo local no hace nada; con Supabase exige sesión y que
  * el correo esté dado de alta y activo en `au_members`.
  */
 export function AuthGate({ children }: { children: ReactNode }) {
+  if (supabaseRequired() && !supabaseEnabled()) {
+    // Versión de producción sin conexión configurada: mejor avisar que trabajar en local sin saberlo.
+    return (
+      <AuthScreen>
+        <ShieldAlert size={36} className="warn" aria-hidden />
+        <h2>Falta conectar la base de datos</h2>
+        <p className="muted" data-testid="config-missing">
+          Esta es la versión en línea, pero aún no tiene la conexión a Supabase. Quien administra el sitio debe llenar <strong>supabaseUrl</strong> y{' '}
+          <strong>supabaseAnonKey</strong> en el bloque <code>AU_CONFIG</code> (al inicio de la plantilla de HubSpot, o en <code>config.js</code> junto a index.html) y recargar.
+        </p>
+      </AuthScreen>
+    );
+  }
   if (!supabaseEnabled()) return <>{children}</>;
   return <SupabaseGate>{children}</SupabaseGate>;
 }

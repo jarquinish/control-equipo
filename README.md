@@ -285,6 +285,7 @@ Las dependencias se guardan como id de área interna o `ext:Nombre` (Comercial, 
 
 - **Unitarias (Vitest, 36 pruebas)**: importación de inventario Excel (lectura .xlsx incluso con prefijos de espacio de nombres, traducción de valores, agrupación de actividades, avisos, alta de personas, sin duplicados al reimportar, plantilla), score y prioridad, rangos inválidos, override, Eisenhower, fechas/semana ISO, bloqueo → compromiso → en gestión, reprogramar (fecha original + contador + motivo), cumplir/escalar, vencidos, regla 8, Weekly completa semana 1 → semana 2 con historial intacto, exportar/restaurar/importar, rechazo de JSON inválido, CSV, persistencia IndexedDB entre "aperturas", adaptador REST, datos demo y cumplimiento.
 - **Supabase**: `npm run test:supabase:sql` (esquema + RLS en PostgreSQL 16 real), `npm run test:supabase` (5 pruebas del adaptador con `supabase-js` contra PostgreSQL + PostgREST) y `npm run test:e2e:supabase` (navegador: código por correo, dos usuarios con roles, correo sin acceso, cerrar sesión). Ver [docs/SUPABASE.md](docs/SUPABASE.md#pruebas-automáticas-de-esta-integración).
+- **HubSpot**: `npm run test:e2e:hubspot` — la plantilla procesada como la entregaría HubSpot, contra la base local tipo Supabase: inicio de sesión con código, Dirección y un gerente importan Excel desde dos navegadores y los datos quedan compartidos en el servidor.
 - **E2E (Playwright, 10 pruebas)**:
   - `import.spec.ts` — importar Excel desde *Actualizar mi área*: plantilla descargable, archivo inválido, vista previa con avisos, corrección de impacto/responsable/fecha, filas pendientes, carga al dashboard y reimportación sin duplicados.
   - `weekly-flow.spec.ts` — **simulación completa de dos semanas desde la UI** (sección 55): responsables, las 4 áreas actualizan, Weekly de 7 pasos (Eisenhower, recálculo, override, detectar, destrabar, comprometer, decisión), cierre con ✓ TODO CLARO, resumen copiado al portapapeles y descargado, respaldo JSON; semana 2: revisar (cumplir con resolución de bloqueo, reprogramar validando motivo, escalar), nuevo proyecto, cierre de proyecto, segunda Weekly cerrada, **semana 1 sin cambios**, evolución sin duplicar, recarga del navegador, importación inválida rechazada y restauración del respaldo.
@@ -299,11 +300,14 @@ La app es una **SPA estática**: `npm run build` genera `dist/`, que puede servi
 | Servidor | Configuración incluida |
 |---|---|
 | Nginx | `deploy/nginx.conf` (fallback SPA, caché de assets, gzip) |
-| Apache | `public/.htaccess` (se copia a `dist/`) |
+| Apache | `deploy/.htaccess` (cópialo a la raíz del sitio) |
 | Netlify | `public/_redirects` |
 | Netlify conectado a GitHub | `netlify.toml` (recomendado con Supabase: las variables se configuran en Netlify) |
 | Vercel | `vercel.json` |
 | Docker | `Dockerfile` (build + Nginx) → `docker build -t alignment-unblock . && docker run -p 8080:80 alignment-unblock` |
+| **HubSpot** | `npm run build:hubspot` → `dist-hubspot/alignment-unblock-hubspot.html`: plantilla de página de un solo archivo (rutas con `#`). Paso a paso en [docs/HUBSPOT.md](docs/HUBSPOT.md). |
+
+**Conexión a Supabase sin recompilar**: el build incluye `config.js` junto a `index.html` (en HubSpot, el bloque `AU_CONFIG` al inicio de la plantilla). Basta con escribir ahí `supabaseUrl` y `supabaseAnonKey`; tiene prioridad sobre las variables `VITE_SUPABASE_*`. Si el build pide Supabase (`VITE_STORAGE=supabase`) y falta la conexión, la app lo avisa en lugar de trabajar en local.
 
 **Subdirectorio**: `BASE_PATH=/alignment/ npm run build` (y ajusta `RewriteBase` en `.htaccess` o el `location` de Nginx).
 

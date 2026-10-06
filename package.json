@@ -17,7 +17,9 @@
     "test:supabase:sql": "bash supabase/tests/run.sh",
     "test:e2e:supabase": "playwright test --config playwright.supabase.config.ts",
     "supabase:local": "node supabase/tests/stack.mjs",
-    "build:single": "tsc -b && vite build --mode single --outDir dist-single"
+    "build:single": "tsc -b && vite build --mode single --outDir dist-single",
+    "build:hubspot": "tsc -b && vite build --mode hubspot --outDir dist-hubspot && node scripts/build-hubspot.mjs",
+    "test:e2e:hubspot": "playwright test --config playwright.hubspot.config.ts"
   },
   "engines": {
     "node": ">=18"
