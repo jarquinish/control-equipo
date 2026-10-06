@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { AlertOctagon, Archive, Check, CheckCircle2, ChevronDown, ChevronUp, Pencil, Plus, Save, Flag } from 'lucide-react';
-import { DEPENDENCY_LABELS, IMPACT_LABELS, PROJECT_STATUSES, URGENCY_LABELS } from '../../domain/constants';
+import { DEPENDENCY_LABELS, IMPACT_HINTS, IMPACT_LABELS, PROJECT_STATUSES, URGENCY_LABELS } from '../../domain/constants';
 import { fmtDateTime } from '../../domain/dates';
 import { computePriority } from '../../domain/scoring';
 import { areaUpdateFor, isActiveProject, personName, projectUpdatedThisWeek, sortProjectsByPriority } from '../../domain/selectors';
@@ -253,7 +253,7 @@ function UpdateRow({ p, updated, readOnly }: { p: Project; updated: boolean; rea
               <span className="field-label">Fecha objetivo</span>
               <input className="input" type="date" value={d.fechaObjetivo} onChange={(e) => setD({ ...d, fechaObjetivo: e.target.value })} />
             </label>
-            <LevelPicker label="Impacto" value={d.impacto} onChange={(v: Level) => setD({ ...d, impacto: v })} labels={IMPACT_LABELS} compact />
+            <LevelPicker label="Impacto" value={d.impacto} onChange={(v: Level) => setD({ ...d, impacto: v })} labels={IMPACT_LABELS} hints={IMPACT_HINTS} compact />
             <LevelPicker label="Urgencia" value={d.urgencia} onChange={(v: Level) => setD({ ...d, urgencia: v })} labels={URGENCY_LABELS} compact />
             <LevelPicker label="Dependencia" value={d.dependencia} onChange={(v: Level) => setD({ ...d, dependencia: v })} labels={DEPENDENCY_LABELS} compact />
             <label className="span-3">

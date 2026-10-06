@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { AlertTriangle, ArrowUpCircle, Check, CheckCircle2, RefreshCw, Scale, X, ArrowDownUp } from 'lucide-react';
-import { DEPENDENCY_LABELS, IMPACT_LABELS, URGENCY_LABELS } from '../../domain/constants';
+import { DEPENDENCY_LABELS, IMPACT_HINTS, IMPACT_LABELS, LEVELS, URGENCY_LABELS } from '../../domain/constants';
 import { fmtDate, fmtDeadline } from '../../domain/dates';
 import { areaUpdateFor, commitmentDisplayStatus, isActiveProject, isOpenCommitment, personName, sortProjectsByPriority, type WeekData } from '../../domain/selectors';
 import { reviewCommitments } from '../../domain/weekly';
@@ -214,6 +214,16 @@ export function Step4Prioritize({ session, data }: StepProps) {
           <AlertTriangle size={20} aria-hidden /> No todo puede ser P1: hay {counts.P1} (recomendado ≤ {settings.criteria.maxP1}). ¿Qué prioridad desplaza?
         </p>
       )}
+      <dl className="impact-legend small" data-testid="impact-legend">
+        {LEVELS.map((l) => (
+          <div key={l}>
+            <dt>
+              Impacto {l} · {IMPACT_LABELS[l]}
+            </dt>
+            <dd className="muted">{IMPACT_HINTS[l]}</dd>
+          </div>
+        ))}
+      </dl>
       <div className="table-wrap card">
         <table className="table prio-table">
           <thead>
@@ -240,7 +250,7 @@ export function Step4Prioritize({ session, data }: StepProps) {
                     </span>
                   </td>
                   <td>
-                    <LevelPicker label={`Impacto de ${p.nombre}`} value={p.impacto} onChange={(v) => setLevel(p.id, 'impacto', v)} labels={IMPACT_LABELS} compact name={`i-${p.id}`} />
+                    <LevelPicker label={`Impacto de ${p.nombre}`} value={p.impacto} onChange={(v) => setLevel(p.id, 'impacto', v)} labels={IMPACT_LABELS} hints={IMPACT_HINTS} compact name={`i-${p.id}`} />
                   </td>
                   <td>
                     <LevelPicker label={`Urgencia de ${p.nombre}`} value={p.urgencia} onChange={(v) => setLevel(p.id, 'urgencia', v)} labels={URGENCY_LABELS} compact name={`u-${p.id}`} />

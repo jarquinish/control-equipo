@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react';
+import { DIRECCION } from '../../domain/constants';
 import { fmtDate, fmtDateTime } from '../../domain/dates';
 import { isBlockOpen, personName } from '../../domain/selectors';
 import { ValidationError, type FieldErrors } from '../../domain/validation';
@@ -91,7 +92,7 @@ export function EscalateModal({ commitmentId, sessionId, onClose }: Base) {
       <form id="esc-form" className="form-grid" onSubmit={submit} noValidate>
         <TextInput label="¿A quién se escala?" value={f.escaladoA} onValue={(v) => setF({ ...f, escaladoA: v })} list="escalate-targets" className="span-2" data-autofocus />
         <datalist id="escalate-targets">
-          {['Dirección de Posicionamiento', ...settings.externalDependencies].map((x) => (
+          {[DIRECCION, ...settings.externalDependencies.filter((x) => x !== DIRECCION)].map((x) => (
             <option key={x} value={x} />
           ))}
         </datalist>
@@ -124,7 +125,7 @@ export function EscalateBlockModal({ blockId, onClose }: { blockId: string; onCl
       <form id="escb-form" onSubmit={submit} noValidate>
         <TextInput label="¿A quién se escala?" value={to} onValue={setTo} list="escb-targets" data-autofocus />
         <datalist id="escb-targets">
-          {['Dirección de Posicionamiento', ...settings.externalDependencies].map((x) => (
+          {[DIRECCION, ...settings.externalDependencies.filter((x) => x !== DIRECCION)].map((x) => (
             <option key={x} value={x} />
           ))}
         </datalist>

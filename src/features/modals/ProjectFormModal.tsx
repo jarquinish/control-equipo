@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { DEPENDENCY_LABELS, IMPACT_LABELS, PROJECT_STATUSES, QUADRANT_LABELS, QUADRANTS, URGENCY_LABELS } from '../../domain/constants';
+import { DEPENDENCY_LABELS, IMPACT_HINTS, IMPACT_LABELS, PROJECT_STATUSES, QUADRANT_LABELS, QUADRANTS, URGENCY_LABELS } from '../../domain/constants';
 import { computePriority, suggestQuadrant } from '../../domain/scoring';
 import type { Level, ProjectStatus, Quadrant, UpdateOrigin } from '../../domain/types';
 import { ValidationError, type FieldErrors } from '../../domain/validation';
@@ -146,7 +146,7 @@ export function ProjectFormModal({ projectId, areaId, origen, onClose }: Props) 
 
         <div className="span-2 scoring-box">
           <div className="scoring-pickers">
-            <LevelPicker label="Impacto" value={f.impacto} onChange={(v) => set('impacto', v)} labels={IMPACT_LABELS} />
+            <LevelPicker label="Impacto" value={f.impacto} onChange={(v) => set('impacto', v)} labels={IMPACT_LABELS} hints={IMPACT_HINTS} />
             <LevelPicker label="Urgencia" value={f.urgencia} onChange={(v) => set('urgencia', v)} labels={URGENCY_LABELS} />
             <LevelPicker label="Dependencia" value={f.dependencia} onChange={(v) => set('dependencia', v)} labels={DEPENDENCY_LABELS} />
           </div>

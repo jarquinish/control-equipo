@@ -893,3 +893,20 @@ a.cell-title:hover,
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
+
+.level-hint {
+  margin: 6px 0 0;
+  line-height: 1.35;
+}
+.impact-legend {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 8px 16px;
+  margin: 0 0 12px;
+}
+.impact-legend dt {
+  font-weight: 700;
+}
+.impact-legend dd {
+  margin: 2px 0 0;
+}

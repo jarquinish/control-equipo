@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { AlertTriangle, ArrowLeft, ArrowRight, CheckCircle2, Flag, LogOut, Maximize2, Pencil, Trash2 } from 'lucide-react';
-import { DEPENDENCY_LABELS, IMPACT_LABELS, QUADRANT_HINTS, QUADRANT_LABELS, QUADRANTS, RULES, URGENCY_LABELS } from '../../domain/constants';
+import { DEPENDENCY_LABELS, IMPACT_HINTS, IMPACT_LABELS, LEVELS, QUADRANT_HINTS, QUADRANT_LABELS, QUADRANTS, RULES, URGENCY_LABELS } from '../../domain/constants';
 import { fmtDate, fmtDeadline } from '../../domain/dates';
 import { AREA_STEP_LABELS, isAreaStage, kickoffStages, METHOD_OBJECTIVE, METHOD_STEPS, stageIndex, type KickoffAreaStep } from '../../domain/kickoff';
 import { computeKpis } from '../../domain/metrics';
@@ -302,9 +302,12 @@ function MethodologySheet({ areas }: { areas: Area[] }) {
                 ).map(([c, l]) => (
                   <tr key={c}>
                     <th scope="row">{c}</th>
-                    <td>{l[1]}</td>
-                    <td>{l[2]}</td>
-                    <td>{l[3]}</td>
+                    {LEVELS.map((n) => (
+                      <td key={n}>
+                        {c === 'Impacto' ? <strong>{l[n]}</strong> : l[n]}
+                        {c === 'Impacto' && <span className="small muted block">{IMPACT_HINTS[n]}</span>}
+                      </td>
+                    ))}
                   </tr>
                 ))}
               </tbody>

@@ -125,7 +125,7 @@ Al final: **Marcar actualización completada** (registra fecha, hora y usuario).
 
 ### Crear un proyecto
 
-Campos: nombre, descripción breve, área, responsable, fecha objetivo, impacto, urgencia, dependencia, Eisenhower (con sugerencia), estado, *¿de quién depende?* y *¿está bloqueado?* El score y la prioridad se calculan en vivo.
+Campos: nombre, descripción breve, área, responsable, fecha objetivo, impacto, urgencia, dependencia, Eisenhower (con sugerencia), estado, *¿de quién depende?* y *¿está bloqueado?* El score y la prioridad se calculan en vivo. En *¿de quién depende?* siempre aparece **Dirección de Posicionamiento** junto a sus cuatro áreas, además de las áreas externas configurables.
 
 ### Priorizar (ponderación)
 
@@ -136,7 +136,7 @@ SCORE = IMPACTO + URGENCIA + DEPENDENCIA      (cada criterio 1–3)
 
 | | 1 | 2 | 3 |
 |---|---|---|---|
-| Impacto | Operativo / bajo | Relevante | Estratégico / comercial / reputacional |
+| Impacto | **Operación** – lo básico de ejecución | **Estrategia** – impacta los objetivos del área (posicionamiento de marca) | **Negocio** – venta a cliente, desarrollo de negocio de oficinas, atracción de franquicias o talento para nuevas oficinas |
 | Urgencia | Puede esperar | Debe avanzar esta semana | Deadline inmediato |
 | Dependencia | Prácticamente autónomo | Depende de otra área/persona | Varias áreas / Dirección / tercero |
 

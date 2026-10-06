@@ -38,6 +38,8 @@ test('Sesión 1: metodología → cada área (registro + pasos 2–7) → resume
   const method = page.getByTestId('methodology');
   await expect(method).toContainText('Agenda de hoy');
   await expect(method).toContainText('Un área a la vez');
+  for (const t of ['Operación', 'Estrategia', 'Negocio']) await expect(method.getByRole('cell', { name: new RegExp(`^${t}`) })).toBeVisible();
+  await expect(method).toContainText('atracción de franquicias o de talento para nuevas oficinas');
   for (const t of ['Revisar', 'Visibilizar', 'Ordenar', 'Priorizar', 'Detectar', 'Destrabar y comprometer', 'Cerrar']) await expect(method.getByRole('heading', { name: t, exact: true })).toBeVisible();
 
   // ── CONTENIDO: registro
@@ -45,6 +47,9 @@ test('Sesión 1: metodología → cada área (registro + pasos 2–7) → resume
   await expect(stage(page)).toHaveText('CONTENIDO · REGISTRO DE PROYECTOS');
   await expect(page.getByRole('heading', { name: '¿CUÁLES SON LOS PROYECTOS DE CONTENIDO?' })).toBeVisible();
   await expect(page.getByTestId('live-projects')).toHaveText('1');
+  const depende = page.getByTestId('quick-form').getByRole('combobox', { name: '¿De quién depende?' });
+  await expect(depende.locator('option', { hasText: 'Dirección de Posicionamiento' })).toHaveCount(1);
+  await depende.selectOption({ label: 'Dirección de Posicionamiento' });
   await register(page, 'Campaña ¿Qué es SOC?', { responsable: true });
   await expect(page.getByTestId('live-projects')).toHaveText('2');
   await register(page, 'SOC TV Temporada 2', { responsable: true, bloqueo: 'Falta calendario de grabación de Comercial' });
@@ -66,6 +71,8 @@ test('Sesión 1: metodología → cada área (registro + pasos 2–7) → resume
   // Paso 4 · Priorizar
   await next(page);
   await expect(stage(page)).toHaveText('CONTENIDO · PASO 4 DE 7');
+  await expect(page.getByTestId('impact-legend')).toContainText('Impacto 3 · Negocio');
+  await expect(page.getByRole('radio', { name: 'Impacto de Campaña ¿Qué es SOC? 3: Negocio' })).toHaveCount(1);
   await page.getByRole('radio', { name: /^Urgencia de Campaña ¿Qué es SOC\? 3:/ }).check({ force: true });
   await page.getByRole('radio', { name: /^Impacto de Campaña ¿Qué es SOC\? 3:/ }).check({ force: true });
   await expect(page.getByTestId('prio-row').filter({ hasText: 'Campaña ¿Qué es SOC?' }).locator('.score-num')).toHaveText('8');

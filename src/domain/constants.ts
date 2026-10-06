@@ -40,10 +40,19 @@ export const DEFAULT_CRITERIA: Criteria = {
 
 export const LEVELS: Level[] = [1, 2, 3];
 
+/** La Dirección a la que pertenecen las áreas; siempre disponible como dependencia. */
+export const DIRECCION = 'Dirección de Posicionamiento';
+
 export const IMPACT_LABELS: Record<Level, string> = {
-  1: 'Operativo / bajo',
-  2: 'Relevante',
-  3: 'Estratégico / comercial / reputacional',
+  1: 'Operación',
+  2: 'Estrategia',
+  3: 'Negocio',
+};
+/** Qué significa cada nivel de impacto. */
+export const IMPACT_HINTS: Record<Level, string> = {
+  1: 'Lo básico de ejecución del día a día.',
+  2: 'Impacta los objetivos del área: el posicionamiento de marca.',
+  3: 'Impacta la venta a cliente, el desarrollo de negocio de oficinas o la atracción de franquicias o de talento para nuevas oficinas.',
 };
 export const URGENCY_LABELS: Record<Level, string> = {
   1: 'Puede esperar',

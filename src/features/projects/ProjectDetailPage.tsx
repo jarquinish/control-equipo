@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { AlertOctagon, Archive, ArrowLeft, CheckCircle2, ListPlus, Pencil, RotateCcw, Scale, MessageSquarePlus } from 'lucide-react';
-import { DEPENDENCY_LABELS, IMPACT_LABELS, QUADRANT_LABELS, URGENCY_LABELS } from '../../domain/constants';
+import { DEPENDENCY_LABELS, IMPACT_HINTS, IMPACT_LABELS, QUADRANT_LABELS, URGENCY_LABELS } from '../../domain/constants';
 import { fmtDate, fmtDateTime } from '../../domain/dates';
 import { blockIsManaged, dependencyLabel, isActiveProject, isOpenCommitment, personName, sortWeeks } from '../../domain/selectors';
 import { useActiveWeek, useApp, useDb, useServices, useSettings } from '../../state/app';
@@ -176,6 +176,7 @@ export function ProjectDetailPage({ id }: { id: string }) {
               <dt>Impacto</dt>
               <dd>
                 <strong>{p.impacto}</strong> · {IMPACT_LABELS[p.impacto]}
+                <span className="small muted block">{IMPACT_HINTS[p.impacto]}</span>
               </dd>
             </div>
             <div>

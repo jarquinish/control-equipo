@@ -99,7 +99,7 @@ export const METHOD_STEPS = [
 ] as const;
 
 export const SCORING_GUIDE = [
-  { criterio: 'Impacto', niveles: ['Operativo / bajo', 'Relevante', 'Estratégico / comercial / reputacional'] },
+  { criterio: 'Impacto', niveles: ['Operación', 'Estrategia', 'Negocio'] },
   { criterio: 'Urgencia', niveles: ['Puede esperar', 'Debe avanzar esta semana', 'Deadline inmediato'] },
   { criterio: 'Dependencia', niveles: ['Prácticamente autónomo', 'Depende de otra área / persona', 'Varias áreas / Dirección / tercero'] },
 ] as const;

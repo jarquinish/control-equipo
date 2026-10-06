@@ -1,5 +1,5 @@
 import { useId, useState, type Ref, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from 'react';
-import { LEVELS } from '../domain/constants';
+import { DIRECCION, LEVELS } from '../domain/constants';
 import type { Level, Role } from '../domain/types';
 import { useDb, useServices, useSettings } from '../state/app';
 import { useFeedback } from './feedback';
@@ -100,6 +100,7 @@ export function LevelPicker({
   value,
   onChange,
   labels,
+  hints,
   name,
   compact,
   disabled,
@@ -108,6 +109,8 @@ export function LevelPicker({
   value: Level;
   onChange: (v: Level) => void;
   labels: Record<Level, string>;
+  /** Explicación de cada nivel (se muestra la del nivel elegido). */
+  hints?: Record<Level, string>;
   name?: string;
   compact?: boolean;
   disabled?: boolean;
@@ -118,13 +121,18 @@ export function LevelPicker({
       <legend className={compact ? 'sr-only' : 'field-label'}>{label}</legend>
       <div className="segmented" role="presentation">
         {LEVELS.map((l) => (
-          <label key={l} className={`seg ${value === l ? 'on' : ''}`} data-tip={compact ? `${label}: ${l} · ${labels[l]}` : undefined}>
+          <label key={l} className={`seg ${value === l ? 'on' : ''}`} title={hints?.[l]} data-tip={compact ? `${label}: ${l} · ${labels[l]}${hints ? ` — ${hints[l]}` : ''}` : undefined}>
             <input type="radio" name={name ?? id} value={l} checked={value === l} onChange={() => onChange(l)} aria-label={`${label} ${l}: ${labels[l]}`} />
             <span className="seg-num">{l}</span>
             {!compact && <span className="seg-text">{labels[l]}</span>}
           </label>
         ))}
       </div>
+      {hints && !compact && (
+        <p className="level-hint small muted" aria-live="polite">
+          <strong>{labels[value]}:</strong> {hints[value]}
+        </p>
+      )}
     </fieldset>
   );
 }
@@ -246,7 +254,8 @@ export function DependencySelect({
   return (
     <SelectInput label={label} value={value ?? ''} onValue={onValue} hint={hint}>
       <option value="">Sin dependencia</option>
-      <optgroup label="Áreas de la Dirección">
+      <optgroup label="Dirección de Posicionamiento y sus áreas">
+        <option value={`ext:${DIRECCION}`}>{DIRECCION}</option>
         {db.areas
           .filter((a) => a.activo && a.id !== excludeAreaId)
           .map((a) => (
@@ -256,12 +265,12 @@ export function DependencySelect({
           ))}
       </optgroup>
       <optgroup label="Otras áreas / externos">
-        {settings.externalDependencies.map((x) => (
+        {settings.externalDependencies.filter((x) => x !== DIRECCION).map((x) => (
           <option key={x} value={`ext:${x}`}>
             {x}
           </option>
         ))}
-        {value?.startsWith('ext:') && !settings.externalDependencies.includes(value.slice(4)) && <option value={value}>{value.slice(4)}</option>}
+        {value?.startsWith('ext:') && value !== `ext:${DIRECCION}` && !settings.externalDependencies.includes(value.slice(4)) && <option value={value}>{value.slice(4)}</option>}
       </optgroup>
     </SelectInput>
   );
