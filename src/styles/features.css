@@ -2168,3 +2168,165 @@ kbd {
 .area-register[open] > summary {
   margin-bottom: 10px;
 }
+
+/* ───────── Importar inventario (Excel) ───────── */
+.alert-red {
+  background: var(--bad-bg);
+  color: var(--bad-fg);
+  border-color: var(--bad-bd);
+}
+.modal-xl:has(.import) {
+  max-width: min(1380px, 96vw);
+}
+.import {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+  min-width: 0;
+}
+.import > * {
+  min-width: 0;
+}
+.import-help {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 4px;
+}
+.import-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  align-items: flex-end;
+  padding: 14px 16px;
+  margin: 0;
+  border: 1px solid var(--line);
+}
+.import-opt {
+  display: grid;
+  gap: 4px;
+  min-width: 200px;
+}
+.import-opt.check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+}
+.import-ignored {
+  flex-basis: 100%;
+  margin: 0;
+}
+.import-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 8px;
+}
+.import-kpi {
+  display: grid;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--gray-bg);
+}
+.import-kpi strong {
+  font-size: 22px;
+  color: var(--brand);
+}
+.import-kpi.warn strong {
+  color: var(--warn-fg);
+}
+.import-sheet h3 {
+  margin: 4px 0 8px;
+}
+.import-table {
+  min-width: 1240px;
+  table-layout: fixed;
+}
+.import-table th:nth-child(1) {
+  width: 72px;
+}
+.import-table th:nth-child(2) {
+  width: 240px;
+}
+.import-table th:nth-child(3) {
+  width: 190px;
+}
+.import-table th:nth-child(4) {
+  width: 180px;
+}
+.import-table th:nth-child(5) {
+  width: 150px;
+}
+.import-table th:nth-child(6) {
+  width: 260px;
+}
+.import-table th:nth-child(7) {
+  width: auto;
+}
+.import-table td {
+  vertical-align: top;
+}
+.import-table .input-sm,
+.input-sm {
+  min-height: 32px;
+  padding: 4px 8px;
+  font-size: 13px;
+  border-radius: 8px;
+}
+.import-table select.input-sm {
+  width: 100%;
+}
+.import-when {
+  margin-top: 4px;
+  flex-wrap: nowrap;
+}
+.import-when .input-sm {
+  width: auto;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.import-when input[type='time'] {
+  flex: 0 0 92px;
+}
+
+.import-prio {
+  margin-top: 4px;
+}
+.import-issues {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+  font-size: 12.5px;
+}
+.import-issues li {
+  display: flex;
+  gap: 4px;
+  align-items: flex-start;
+}
+.import-issues li svg {
+  flex: none;
+  margin-top: 2px;
+}
+.import-issues .warn {
+  color: var(--warn-fg);
+}
+.import-issues .info {
+  color: var(--gray-fg);
+}
+tr.import-off td {
+  opacity: 0.55;
+}
+.import-cta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+}
+.area-import {
+  justify-self: start;
+  margin: 0 0 12px;
+}

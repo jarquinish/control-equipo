@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { AlertOctagon, Archive, Check, CheckCircle2, ChevronDown, ChevronUp, Pencil, Plus, Save, Flag } from 'lucide-react';
+import { AlertOctagon, Archive, Check, CheckCircle2, ChevronDown, ChevronUp, FileSpreadsheet, Pencil, Plus, Save, Flag } from 'lucide-react';
 import { DEPENDENCY_LABELS, IMPACT_HINTS, IMPACT_LABELS, PROJECT_STATUSES, URGENCY_LABELS } from '../../domain/constants';
 import { fmtDateTime } from '../../domain/dates';
 import { computePriority } from '../../domain/scoring';
@@ -135,6 +135,11 @@ export function AreaUpdatePage() {
           <summary className="btn btn-secondary">＋ Registrar proyecto de {area.nombre}</summary>
           <ProjectQuickForm key={area.id} areaId={area.id} areaName={area.nombre} origen="area" />
         </details>
+      )}
+      {live && (
+        <button type="button" className="btn btn-secondary area-import" onClick={() => modals.open({ type: 'import', areaId: area.id })} data-testid="area-import">
+          <FileSpreadsheet size={16} aria-hidden /> Importar Excel de {area.nombre}
+        </button>
       )}
 
       {projects.length === 0 ? (

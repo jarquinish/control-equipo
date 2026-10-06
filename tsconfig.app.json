@@ -18,5 +18,5 @@
     "noFallthroughCasesInSwitch": true,
     "types": ["vite/client"]
   },
-  "include": ["src", "tests/unit"]
+  "include": ["src", "tests/unit", "tests/fixtures"]
 }

@@ -5,6 +5,7 @@ import { BlockFormModal } from './BlockFormModal';
 import { CommitmentFormModal } from './CommitmentFormModal';
 import { CompleteModal, CommentModal, EscalateBlockModal, EscalateModal, FailModal, RescheduleModal } from './CommitmentActionModals';
 import { DecisionModal } from './DecisionModal';
+import { ImportInventoryModal } from './ImportInventoryModal';
 import { OverrideModal } from './OverrideModal';
 import { SummaryModal } from './SummaryModal';
 
@@ -20,7 +21,8 @@ export type ModalRequest =
   | { type: 'fail'; commitmentId: string; sessionId?: string }
   | { type: 'decision'; projectId?: string; sessionId?: string }
   | { type: 'override'; projectId: string; sessionId?: string; origen?: UpdateOrigin }
-  | { type: 'summary'; weekId?: string; justClosed?: boolean };
+  | { type: 'summary'; weekId?: string; justClosed?: boolean }
+  | { type: 'import'; areaId?: string; origen?: UpdateOrigin };
 
 interface ModalApi {
   open: (req: ModalRequest) => void;
@@ -68,6 +70,8 @@ function ActiveModal({ req, close }: { req: ModalRequest; close: () => void }) {
       return <OverrideModal {...req} onClose={close} />;
     case 'summary':
       return <SummaryModal {...req} onClose={close} />;
+    case 'import':
+      return <ImportInventoryModal {...req} onClose={close} />;
   }
 }
 

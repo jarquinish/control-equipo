@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { AlertTriangle, ArrowLeft, ArrowRight, CheckCircle2, Flag, LogOut, Maximize2, Pencil, Trash2 } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, ArrowRight, CheckCircle2, FileSpreadsheet, Flag, LogOut, Maximize2, Pencil, Trash2 } from 'lucide-react';
 import { DEPENDENCY_LABELS, IMPACT_HINTS, IMPACT_LABELS, LEVELS, QUADRANT_HINTS, QUADRANT_LABELS, QUADRANTS, RULES, URGENCY_LABELS } from '../../domain/constants';
 import { fmtDate, fmtDeadline } from '../../domain/dates';
 import { AREA_STEP_LABELS, isAreaStage, kickoffStages, METHOD_OBJECTIVE, METHOD_STEPS, stageIndex, type KickoffAreaStep } from '../../domain/kickoff';
@@ -362,6 +362,12 @@ function AreaRegistro({ area, data }: { area: Area; data: WeekData }) {
         Proyectos de <strong>{area.nombre}</strong>, no actividades. Cada proyecto guardado aparece de inmediato en el dashboard, en Proyectos y en el tablero del área.
       </p>
       <ProjectQuickForm areaId={area.id} areaName={area.nombre} origen="junta" />
+      <p className="import-cta small">
+        ¿{area.nombre} ya tiene su inventario en Excel?{' '}
+        <button type="button" className="btn btn-secondary btn-sm" onClick={() => modals.open({ type: 'import', areaId: area.id, origen: 'junta' })} data-testid="kickoff-import">
+          <FileSpreadsheet size={16} aria-hidden /> Importar Excel de {area.nombre}
+        </button>
+      </p>
       {list.length > max && (
         <p className="alert alert-yellow">
           <AlertTriangle size={18} aria-hidden /> {area.nombre} tiene {list.length} proyectos. ¿Todos necesitan foco? Recomendación: máximo {max}.

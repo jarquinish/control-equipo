@@ -6,6 +6,7 @@ import { backupService } from './backupService';
 import { blockService } from './blockService';
 import { commitmentService } from './commitmentService';
 import { createContext, type ServiceContext } from './context';
+import { importService } from './importService';
 import { peopleService } from './peopleService';
 import { projectService } from './projectService';
 import { sessionService } from './sessionService';
@@ -14,14 +15,19 @@ import { weekService } from './weekService';
 
 export function createServices(store: DataStore, now: () => Date = () => new Date()) {
   const ctx = createContext(store, now);
+  const people = peopleService(ctx);
+  const projects = projectService(ctx);
+  const blocks = blockService(ctx);
+  const commitments = commitmentService(ctx);
   return {
     ctx,
     settings: settingsService(ctx),
-    people: peopleService(ctx),
+    people,
     areas: areaService(ctx),
-    projects: projectService(ctx),
-    blocks: blockService(ctx),
-    commitments: commitmentService(ctx),
+    projects,
+    blocks,
+    commitments,
+    imports: importService(ctx, { people, projects, blocks, commitments }),
     weeks: weekService(ctx),
     sessions: sessionService(ctx),
     backup: backupService(ctx),

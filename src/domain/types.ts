@@ -73,6 +73,8 @@ export interface Project extends BaseEntity {
   fechaObjetivo?: ISODate;
   /** Clave de dependencia principal (id de área interna o `ext:Nombre`). */
   dependeDe?: string;
+  /** ID de origen (p. ej. CON-01) cuando el proyecto vino de un inventario en Excel. */
+  ref?: string;
   createdWeekId?: ID;
   closedAt?: ISODateTime;
   updatedBy?: ID;

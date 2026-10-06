@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import {
   Database,
   Download,
+  FileSpreadsheet,
   FlaskConical,
   Plus,
   RotateCcw,
@@ -39,6 +40,7 @@ import { Modal } from "../../ui/Modal";
 import { can } from "../../domain/permissions";
 import { bootstrapEmpty } from "../../services";
 import { AccessSection } from "./AccessSection";
+import { useModals } from "../modals/ModalHost";
 import { ensureIdentity } from "../../services/identityService";
 import { demoEnabled } from "../../state/workspace";
 
@@ -58,6 +60,7 @@ export function SettingsPage() {
   const settings = useSettings();
   const user = useCurrentUser();
   const services = useServices();
+  const modals = useModals();
   const active = useActiveWeek();
   const {
     workspace,
@@ -637,6 +640,23 @@ export function SettingsPage() {
 
       <Section title="Datos, exportación y respaldo" id="cfg-data">
         <div className="data-actions">
+          <div>
+            <h3>Inventario de proyectos (Excel)</h3>
+            <div className="row gap wrap">
+              <button
+                className="btn btn-primary"
+                onClick={() => modals.open({ type: "import" })}
+                disabled={!can(user, "project.edit")}
+                data-testid="open-import"
+              >
+                <FileSpreadsheet size={16} aria-hidden /> Importar Excel
+              </button>
+            </div>
+            <p className="small muted">
+              Una hoja por área. Vista previa con avisos antes de guardar;
+              incluye la plantilla para descargar.
+            </p>
+          </div>
           <div>
             <h3>Respaldo completo</h3>
             <div className="row gap wrap">

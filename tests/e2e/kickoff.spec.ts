@@ -47,6 +47,7 @@ test('Sesión 1: metodología → cada área (registro + pasos 2–7) → resume
   await expect(stage(page)).toHaveText('CONTENIDO · REGISTRO DE PROYECTOS');
   await expect(page.getByRole('heading', { name: '¿CUÁLES SON LOS PROYECTOS DE CONTENIDO?' })).toBeVisible();
   await expect(page.getByTestId('live-projects')).toHaveText('1');
+  await expect(page.getByTestId('kickoff-import')).toHaveText(/Importar Excel de Contenido/);
   const depende = page.getByTestId('quick-form').getByRole('combobox', { name: '¿De quién depende?' });
   await expect(depende.locator('option', { hasText: 'Dirección de Posicionamiento' })).toHaveCount(1);
   await depende.selectOption({ label: 'Dirección de Posicionamiento' });

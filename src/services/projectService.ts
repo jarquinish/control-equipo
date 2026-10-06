@@ -17,6 +17,7 @@ export interface ProjectInput {
   eisenhower?: Quadrant;
   estado?: ProjectStatus;
   dependeDe?: string;
+  ref?: string;
 }
 
 export interface UpdateOptions {
@@ -80,6 +81,7 @@ export function projectService(ctx: ServiceContext) {
       bloqueado: false,
       fechaObjetivo: input.fechaObjetivo || undefined,
       dependeDe: input.dependeDe || undefined,
+      ref: input.ref?.trim() || undefined,
       createdWeekId: ctx.activeWeek()?.id,
       createdAt: at,
       updatedAt: at,

@@ -127,6 +127,19 @@ Al final: **Marcar actualización completada** (registra fecha, hora y usuario).
 
 Campos: nombre, descripción breve, área, responsable, fecha objetivo, impacto, urgencia, dependencia, Eisenhower (con sugerencia), estado, *¿de quién depende?* y *¿está bloqueado?* El score y la prioridad se calculan en vivo. En *¿de quién depende?* siempre aparece **Dirección de Posicionamiento** junto a sus cuatro áreas, además de las áreas externas configurables.
 
+### Importar el inventario desde Excel
+
+Botón **Importar Excel** en *Actualizar mi área*, en el registro de cada área de la *Sesión 1* y en *Configuración → Datos*. También ahí se descarga la **plantilla oficial** (`Plantilla_Inventario_Alignment_Unblock.xlsx`: hoja de instrucciones + una hoja por área con listas desplegables).
+
+- Se lee cada hoja cuyo nombre coincide con un área (las demás, como un resumen, se ignoran). Los encabezados se reconocen por nombre, no por posición, y pueden estar en cualquiera de las primeras 20 filas; acepta el formato original del inventario «Baseline 01» y el de la plantilla.
+- **Vista previa antes de guardar**: qué se crea (proyectos, frentes, compromisos, bloqueos, personas), avisos por fila y alertas de límite (proyectos por área, P1). En cada fila se corrige *Importar como*, *Responsable*, *Impacto* (Operación / Estrategia / Negocio) y la fecha y hora del compromiso.
+- **Sólo filas validadas** (`Validación gerencia` = Validado o Modificado); las *Pendientes* se pueden incluir con una casilla y las *Descartadas* nunca se importan.
+- **Proyectos, no actividades**: *Proyecto* y *Subproyecto* se crean como proyecto; *Actividad* u *Operación recurrente* se agrupan dentro del proyecto indicado en *Proyecto padre / frente* (o en un frente con ese nombre) y quedan listadas en su descripción, con sus compromisos y bloqueos.
+- **Traducciones**: Alto/Medio/Bajo y Alta/Media/Baja → 3/2/1 (el impacto queda marcado para clasificarse como Operación, Estrategia o Negocio); estados libres → los seis de la herramienta (p. ej. *Atorado* → En riesgo + bloqueo, *Casi terminado* → En curso); *Prioridad validada* distinta a la fórmula → ajuste de Dirección; *Prioridad IA* distinta → aviso.
+- **Personas**: un nombre por campo; «Laura / Marta» toma a la primera y muestra el texto original; «Laura» se une con «Laura Pérez» si es la única con ese nombre; áreas o equipos («Diseño», «Por validar») no se toman como personas. Las personas nuevas se dan de alta automáticamente.
+- **Compromisos**: la *Siguiente acción* (y la solución de cada bloqueo) se registra como compromiso cuando tiene responsable, fecha y hora; sin hora se usa la hora configurada en la vista previa (18:00 por omisión). Fechas como «Semana del 12 oct» o «Antes de 2026-10-14» se interpretan y se avisan; «Semanal» no es una fecha.
+- **Sin duplicados**: el ID de cada fila (p. ej. `CON-01`) se guarda en el proyecto; al volver a importar, las filas con ID o nombre existente en el área se omiten.
+
 ### Priorizar (ponderación)
 
 ```
@@ -270,9 +283,10 @@ Las dependencias se guardan como id de área interna o `ext:Nombre` (Comercial, 
 
 ## Pruebas
 
-- **Unitarias (Vitest, 28 pruebas)**: score y prioridad, rangos inválidos, override, Eisenhower, fechas/semana ISO, bloqueo → compromiso → en gestión, reprogramar (fecha original + contador + motivo), cumplir/escalar, vencidos, regla 8, Weekly completa semana 1 → semana 2 con historial intacto, exportar/restaurar/importar, rechazo de JSON inválido, CSV, persistencia IndexedDB entre "aperturas", adaptador REST, datos demo y cumplimiento.
+- **Unitarias (Vitest, 36 pruebas)**: importación de inventario Excel (lectura .xlsx incluso con prefijos de espacio de nombres, traducción de valores, agrupación de actividades, avisos, alta de personas, sin duplicados al reimportar, plantilla), score y prioridad, rangos inválidos, override, Eisenhower, fechas/semana ISO, bloqueo → compromiso → en gestión, reprogramar (fecha original + contador + motivo), cumplir/escalar, vencidos, regla 8, Weekly completa semana 1 → semana 2 con historial intacto, exportar/restaurar/importar, rechazo de JSON inválido, CSV, persistencia IndexedDB entre "aperturas", adaptador REST, datos demo y cumplimiento.
 - **Supabase**: `npm run test:supabase:sql` (esquema + RLS en PostgreSQL 16 real), `npm run test:supabase` (5 pruebas del adaptador con `supabase-js` contra PostgreSQL + PostgREST) y `npm run test:e2e:supabase` (navegador: código por correo, dos usuarios con roles, correo sin acceso, cerrar sesión). Ver [docs/SUPABASE.md](docs/SUPABASE.md#pruebas-automáticas-de-esta-integración).
-- **E2E (Playwright, 8 pruebas)**:
+- **E2E (Playwright, 10 pruebas)**:
+  - `import.spec.ts` — importar Excel desde *Actualizar mi área*: plantilla descargable, archivo inválido, vista previa con avisos, corrección de impacto/responsable/fecha, filas pendientes, carga al dashboard y reimportación sin duplicados.
   - `weekly-flow.spec.ts` — **simulación completa de dos semanas desde la UI** (sección 55): responsables, las 4 áreas actualizan, Weekly de 7 pasos (Eisenhower, recálculo, override, detectar, destrabar, comprometer, decisión), cierre con ✓ TODO CLARO, resumen copiado al portapapeles y descargado, respaldo JSON; semana 2: revisar (cumplir con resolución de bloqueo, reprogramar validando motivo, escalar), nuevo proyecto, cierre de proyecto, segunda Weekly cerrada, **semana 1 sin cambios**, evolución sin duplicar, recarga del navegador, importación inválida rechazada y restauración del respaldo.
   - `demo-and-ux.spec.ts` — KPIs clicables, alertas, búsqueda global, Mis compromisos, dependencias, historial, aislamiento demo/principal, reinicio de demo con confirmación, drag & drop en Eisenhower y Kanban (incluida la regla de compromiso), y **sin scroll horizontal** en todas las vistas y los 7 pasos del Modo Junta a 1920×1080, 1440×900, 1366×768, 1024×768 y 390×844.
 
