@@ -48,7 +48,21 @@ test('plantilla de HubSpot: inicio de sesión, importación de Excel y datos com
   await ger.getByTestId('area-import').click();
   await importBook(ger, 'Diseño');
 
-  // Dirección recarga: los datos están en el servidor, no en el navegador
+  // Dirección deja la pestaña inactiva y vuelve después de un rato (sin recargar):
+  // la sesión se renueva, la información se actualiza y no aparece ningún error.
+  await admin.evaluate(() => {
+    const realNow = Date.now.bind(Date);
+    let state: DocumentVisibilityState = 'hidden';
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => state });
+    document.dispatchEvent(new Event('visibilitychange'));
+    Date.now = () => realNow() + 5 * 60_000;
+    state = 'visible';
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  await expect(admin.getByTestId('project-row')).toHaveCount(8);
+  await expect(admin.getByText(/No fue posible/)).toHaveCount(0);
+
+  // Y al recargar, los datos siguen ahí: están en el servidor, no en el navegador
   await admin.reload();
   await expect(admin.getByTestId('project-row')).toHaveCount(8);
   await admin.goto('/#/');

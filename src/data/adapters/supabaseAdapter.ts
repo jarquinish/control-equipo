@@ -3,6 +3,7 @@ import { COLLECTIONS, type CollectionName, type DbData } from '../../domain/type
 import type { ChangeOp, StorageAdapter } from './StorageAdapter';
 
 const TABLE = 'au_records';
+let channelSeq = 0;
 const PAGE = 1000;
 
 interface RecordRow {
@@ -109,8 +110,10 @@ export class SupabaseAdapter implements StorageAdapter {
   }
 
   subscribe(onChange: (op: ChangeOp) => void): () => void {
+    // Nombre único por suscripción: supabase-js reutiliza un canal con el mismo nombre
+    // y rechaza agregarle escuchas si ya estaba suscrito (p. ej. al reabrir la base).
     const channel = this.client
-      .channel(`au_records:${this.clientId}`)
+      .channel(`au_records:${this.clientId}:${++channelSeq}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: TABLE }, (payload) => {
         const op = toChangeOp(payload as RealtimePayload, this.clientId);
         if (op) onChange(op);

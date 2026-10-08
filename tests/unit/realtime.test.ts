@@ -59,3 +59,66 @@ describe('tiempo real (Supabase)', () => {
     expect(ensureIdentity(svc, { email: 'otro@soc.mx', rol: 'DIRECTOR', personId: ana.id })).toBe(ana.id);
   });
 });
+
+describe('reabrir la información con la misma pestaña (sesión renovada)', () => {
+  /** Cliente falso con el comportamiento de supabase-js: un canal con el mismo nombre se reutiliza
+   *  y no admite nuevas escuchas una vez suscrito. */
+  function fakeClient() {
+    const channels = new Map<string, { subscribed: boolean }>();
+    const removed: string[] = [];
+    const client = {
+      channel(topic: string) {
+        const ch = channels.get(topic) ?? { subscribed: false };
+        channels.set(topic, ch);
+        const api = {
+          on() {
+            if (ch.subscribed) throw new Error(`cannot add \`postgres_changes\` callbacks for realtime:${topic} after \`subscribe()\`.`);
+            return api;
+          },
+          subscribe() {
+            ch.subscribed = true;
+            return api;
+          },
+          topic,
+        };
+        return api;
+      },
+      removeChannel: async (c: { topic: string }) => void removed.push(c.topic),
+      from: () => ({ select: () => ({ order: () => ({ order: () => ({ range: async () => ({ data: [], error: null }) }) }) }) }),
+    };
+    return { client, removed };
+  }
+
+  it('cada suscripción usa su propio canal: abrir dos veces no falla', async () => {
+    const { SupabaseAdapter } = await import('../../src/data/adapters/supabaseAdapter');
+    const { client, removed } = fakeClient();
+    const a = new SupabaseAdapter(client as never, 'tab_1');
+    const stop1 = a.subscribe(() => {});
+    expect(() => a.subscribe(() => {})).not.toThrow();
+    stop1();
+    expect(removed).toHaveLength(1);
+  });
+
+  it('si el tiempo real falla, la información se abre igual', async () => {
+    const adapter: StorageAdapter = {
+      kind: 'fake',
+      load: async () => null,
+      apply: async () => {},
+      replaceAll: async () => {},
+      clear: async () => {},
+      subscribe: () => {
+        throw new Error('realtime caído');
+      },
+    };
+    const store = new DataStore(adapter);
+    await expect(store.init()).resolves.toBe(false);
+  });
+
+  it('la misma persona con el mismo acceso no reabre la información', async () => {
+    const { sameAccess } = await import('../../src/state/auth');
+    const member = { email: 'a@soc.mx', rol: 'GERENTE' as const, person_id: 'per_1', activo: true };
+    expect(sameAccess({ email: 'a@soc.mx', member }, 'a@soc.mx', { ...member })).toBe(true);
+    expect(sameAccess({ email: 'a@soc.mx', member }, 'a@soc.mx', { ...member, rol: 'DIRECTOR' })).toBe(false);
+    expect(sameAccess({ email: 'a@soc.mx', member }, 'b@soc.mx', { ...member, email: 'b@soc.mx' })).toBe(false);
+  });
+});

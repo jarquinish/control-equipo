@@ -60,6 +60,11 @@ export function AuthGate({ children }: { children: ReactNode }) {
   return <SupabaseGate>{children}</SupabaseGate>;
 }
 
+/** Misma persona con el mismo rol, vínculo y estado: no hace falta reabrir la información. */
+export function sameAccess(prev: Pick<AuthInfo, 'email' | 'member'>, email: string, member: Member): boolean {
+  return prev.email === email && prev.member.rol === member.rol && prev.member.person_id === member.person_id && prev.member.activo === member.activo;
+}
+
 function SupabaseGate({ children }: { children: ReactNode }) {
   const [state, setState] = useState<State>({ kind: 'loading' });
 
@@ -74,7 +79,12 @@ function SupabaseGate({ children }: { children: ReactNode }) {
       if (error) return setState({ kind: 'error', message: 'No fue posible verificar tu acceso. Revisa tu conexión e intenta de nuevo.' });
       if (!data || !data.activo) return setState({ kind: 'noAccess', client, email });
       const meta = session.user.user_metadata ?? {};
-      setState({
+      // Al volver a la pestaña, Supabase renueva la sesión y avisa «SIGNED_IN» otra vez:
+      // si es la misma persona con el mismo acceso, se conserva el estado (no se reabre la base).
+      setState((prev) =>
+        prev.kind === 'ready' && sameAccess(prev.auth, email, data as Member)
+          ? prev
+          : {
         kind: 'ready',
         auth: {
           client,
@@ -85,7 +95,8 @@ function SupabaseGate({ children }: { children: ReactNode }) {
             await client.auth.signOut();
           },
         },
-      });
+      },
+      );
     };
     getSupabase()
       .then(async (client) => {

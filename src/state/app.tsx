@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { DataStore } from '../data/store';
 import { getActiveWeek, getSettings, getWeekData, liveSelection, type WeekData } from '../domain/selectors';
 import type { DbData, Person, Settings } from '../domain/types';
@@ -68,6 +68,7 @@ export function AppProvider({ children, fallback }: { children: ReactNode; fallb
   const [viewWeekId, setViewWeekId] = useState<string | undefined>();
   const auth = useAuth();
   const { toast } = useFeedback();
+  const storeRef = useRef<DataStore | null>(null);
 
   const load = useCallback(
     async (ws: Workspace) => {
@@ -82,6 +83,9 @@ export function AppProvider({ children, fallback }: { children: ReactNode; fallb
             setSaveError('No se pudo guardar el último cambio en este navegador. Genera un respaldo y recarga la página.');
           }
         });
+        // La base anterior (y su conexión en tiempo real) se cierra al abrir la nueva.
+        if (storeRef.current && storeRef.current !== opened.store) storeRef.current.dispose();
+        storeRef.current = opened.store;
         setState({ ...opened, workspace: ws });
         setViewWeekId(undefined);
       } catch (err) {
@@ -91,7 +95,9 @@ export function AppProvider({ children, fallback }: { children: ReactNode; fallb
             ? 'El espacio compartido aún no está inicializado. Dirección debe entrar primero para crear las áreas y la semana activa.'
             : err instanceof RemoteError
               ? err.message
-              : 'No fue posible abrir la información guardada en este navegador. Revisa que no estés en modo privado o que el almacenamiento no esté bloqueado.',
+              : auth
+                ? 'No fue posible cargar la información del servidor. Revisa tu conexión e intenta de nuevo.'
+                : 'No fue posible abrir la información guardada en este navegador. Revisa que no estés en modo privado o que el almacenamiento no esté bloqueado.',
         );
       }
     },
@@ -102,6 +108,24 @@ export function AppProvider({ children, fallback }: { children: ReactNode; fallb
   useEffect(() => {
     void load(getWorkspace());
   }, [load]);
+
+  useEffect(() => () => storeRef.current?.dispose(), []);
+
+  // Con Supabase: al volver a la pestaña después de un rato se recarga la información
+  // (el tiempo real puede perder cambios mientras la computadora estuvo suspendida).
+  useEffect(() => {
+    if (!state || state.store.adapter.kind !== 'supabase') return;
+    let hiddenAt = 0;
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') hiddenAt = Date.now();
+      else if (hiddenAt && Date.now() - hiddenAt > 60_000) {
+        hiddenAt = 0;
+        void state.store.reload().catch(() => setSaveError('Sin conexión con el servidor. Los cambios recientes podrían no haberse guardado.'));
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => document.removeEventListener('visibilitychange', onVisibility);
+  }, [state]);
 
   // Reloj de la aplicación: actualiza vencimientos automáticamente.
   useEffect(() => {

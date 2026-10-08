@@ -44,7 +44,12 @@ export class DataStore {
     this.data = normalizeData(loaded);
     this.ready = true;
     this.emit();
-    this.unsubscribeRemote = this.adapter.subscribe?.((op) => this.applyExternal(op));
+    try {
+      this.unsubscribeRemote = this.adapter.subscribe?.((op) => this.applyExternal(op));
+    } catch (err) {
+      // Sin tiempo real la app sigue funcionando (los datos se recargan al volver a la pestaña).
+      console.warn('[Alignment & Unblock] Tiempo real no disponible', err);
+    }
     return loaded !== null;
   }
 
