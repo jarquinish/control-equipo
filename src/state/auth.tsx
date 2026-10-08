@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import type { Session, SupabaseClient } from '@supabase/supabase-js';
 import { LogIn, Mail, ShieldAlert } from 'lucide-react';
-import { getSupabase, SUPABASE_MICROSOFT, supabaseEnabled, supabaseRequired } from '../data/supabase';
+import { getSupabase, SUPABASE_EMAIL_CODE, SUPABASE_MICROSOFT, supabaseEnabled, supabaseRequired } from '../data/supabase';
 import type { Role } from '../domain/types';
 
 export interface Member {
@@ -158,19 +158,33 @@ function AuthScreen({ children }: { children: ReactNode }) {
 }
 
 function LoginScreen({ client }: { client: SupabaseClient }) {
+  const [mode, setMode] = useState<'password' | 'code'>('password');
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [code, setCode] = useState('');
   const [sent, setSent] = useState(false);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const clean = () => email.trim().toLowerCase();
+  const validEmail = () => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(clean());
+
+  const signIn = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!validEmail()) return setMsg('Escribe un correo válido.');
+    if (!password) return setMsg('Escribe tu contraseña.');
+    setBusy(true);
+    setMsg(null);
+    const { error } = await client.auth.signInWithPassword({ email: clean(), password });
+    setBusy(false);
+    if (error) setMsg('Correo o contraseña incorrectos. Si no tienes contraseña, pídela a Dirección.');
+  };
 
   const sendCode = async (e: FormEvent) => {
     e.preventDefault();
-    const clean = email.trim().toLowerCase();
-    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(clean)) return setMsg('Escribe un correo válido.');
+    if (!validEmail()) return setMsg('Escribe un correo válido.');
     setBusy(true);
     setMsg(null);
-    const { error } = await client.auth.signInWithOtp({ email: clean, options: { emailRedirectTo: redirectTo() } });
+    const { error } = await client.auth.signInWithOtp({ email: clean(), options: { emailRedirectTo: redirectTo() } });
     setBusy(false);
     if (error) return setMsg('No se pudo enviar el código. Intenta de nuevo en un minuto.');
     setSent(true);
@@ -180,7 +194,7 @@ function LoginScreen({ client }: { client: SupabaseClient }) {
     e.preventDefault();
     setBusy(true);
     setMsg(null);
-    const { error } = await client.auth.verifyOtp({ email: email.trim().toLowerCase(), token: code.trim(), type: 'email' });
+    const { error } = await client.auth.verifyOtp({ email: clean(), token: code.trim(), type: 'email' });
     setBusy(false);
     if (error) setMsg('El código no es válido o ya expiró. Solicita uno nuevo.');
   };
@@ -190,6 +204,19 @@ function LoginScreen({ client }: { client: SupabaseClient }) {
     if (error) setMsg('No se pudo iniciar sesión con Microsoft.');
   };
 
+  const switchMode = (m: 'password' | 'code') => {
+    setMode(m);
+    setSent(false);
+    setMsg(null);
+  };
+
+  const emailField = (
+    <label className="field">
+      <span className="field-label">Correo</span>
+      <input className="input" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="nombre@socasesores.com.mx" autoFocus />
+    </label>
+  );
+
   return (
     <AuthScreen>
       <h1 className="auth-title">Iniciar sesión</h1>
@@ -198,17 +225,33 @@ function LoginScreen({ client }: { client: SupabaseClient }) {
           <button className="btn btn-primary btn-lg auth-full" onClick={microsoft}>
             <LogIn size={18} aria-hidden /> Entrar con cuenta Microsoft (SOC)
           </button>
-          <p className="auth-or">o con un código por correo</p>
+          <p className="auth-or">o con tu correo</p>
         </>
       )}
-      {!sent ? (
-        <form onSubmit={sendCode} className="auth-form">
+      {mode === 'password' ? (
+        <form onSubmit={signIn} className="auth-form">
+          {emailField}
           <label className="field">
-            <span className="field-label">Correo</span>
-            <input className="input" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="nombre@socasesores.com.mx" autoFocus />
+            <span className="field-label">Contraseña</span>
+            <input className="input" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
           </label>
+          <button className="btn btn-primary btn-lg auth-full" disabled={busy}>
+            <LogIn size={18} aria-hidden /> Entrar
+          </button>
+          {SUPABASE_EMAIL_CODE && (
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => switchMode('code')}>
+              No tengo contraseña: recibir un código por correo
+            </button>
+          )}
+        </form>
+      ) : !sent ? (
+        <form onSubmit={sendCode} className="auth-form">
+          {emailField}
           <button className="btn btn-secondary btn-lg auth-full" disabled={busy}>
             <Mail size={18} aria-hidden /> Enviarme un código de acceso
+          </button>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => switchMode('password')}>
+            Entrar con contraseña
           </button>
         </form>
       ) : (

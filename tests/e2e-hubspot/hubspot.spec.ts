@@ -1,14 +1,14 @@
 import { expect, test, type Page } from '@playwright/test';
 import { inventoryBook } from '../fixtures/inventory';
 
-async function login(page: Page, email: string) {
+async function login(page: Page, email: string, password = 'Clave-Prueba-2026') {
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Iniciar sesión' })).toBeVisible();
+  // Sin SMTP (emailCode: false) sólo se entra con contraseña: no se ofrece el código por correo.
+  await expect(page.getByRole('button', { name: /recibir un código/ })).toHaveCount(0);
   await page.getByLabel('Correo').fill(email);
-  await page.getByRole('button', { name: 'Enviarme un código de acceso' }).click();
-  await page.getByLabel('Código').fill('123456');
-  await page.getByRole('button', { name: 'Entrar' }).click();
-  await expect(page.getByTestId('week-label')).toBeVisible();
+  await page.getByLabel('Contraseña').fill(password);
+  await page.getByRole('button', { name: 'Entrar', exact: true }).click();
 }
 
 async function importBook(page: Page, sheet: string) {
@@ -23,7 +23,11 @@ test('plantilla de HubSpot: inicio de sesión, importación de Excel y datos com
   const errors: string[] = [];
   const admin = await (await browser.newContext()).newPage();
   admin.on('pageerror', (e) => errors.push(e.message));
-  await login(admin, 'admin@soc.test');
+  await login(admin, 'admin@soc.test', 'contraseña-incorrecta');
+  await expect(admin.getByRole('alert')).toContainText('Correo o contraseña incorrectos');
+  await admin.getByLabel('Contraseña').fill('Clave-Prueba-2026');
+  await admin.getByRole('button', { name: 'Entrar', exact: true }).click();
+  await expect(admin.getByTestId('week-label')).toBeVisible();
 
   // Dirección importa el inventario de Contenido desde Configuración
   await admin.goto('/#/configuracion');
@@ -36,6 +40,7 @@ test('plantilla de HubSpot: inicio de sesión, importación de Excel y datos com
   const ger = await (await browser.newContext()).newPage();
   ger.on('pageerror', (e) => errors.push(e.message));
   await login(ger, 'gerente@soc.test');
+  await expect(ger.getByTestId('week-label')).toBeVisible();
   await ger.goto('/#/proyectos');
   await expect(ger.getByTestId('project-row')).toHaveCount(4);
   await ger.goto('/#/actualizar');

@@ -21,6 +21,8 @@ import { fileURLToPath } from 'node:url';
 
 export const JWT_SECRET = 'alignment-unblock-local-test-secret-0123456789';
 export const OTP_CODE = '123456';
+/** Contraseña aceptada por el inicio de sesión con contraseña simulado. */
+export const TEST_PASSWORD = 'Clave-Prueba-2026';
 export const PORT = Number(process.env.STACK_PORT ?? 54321);
 const PG_PORT = Number(process.env.STACK_PG_PORT ?? 55433);
 const REST_PORT = PORT + 1;
@@ -174,6 +176,11 @@ async function handle(req, res) {
   if (url.pathname === '/auth/v1/verify') {
     const { email, token } = JSON.parse((await readBody(req)).toString() || '{}');
     if (token !== OTP_CODE) return json(403, { code: 403, error_code: 'otp_expired', msg: 'Token has expired or is invalid' });
+    return json(200, session(String(email).toLowerCase()));
+  }
+  if (url.pathname === '/auth/v1/token' && url.searchParams.get('grant_type') === 'password') {
+    const { email, password } = JSON.parse((await readBody(req)).toString() || '{}');
+    if (password !== TEST_PASSWORD) return json(400, { code: 400, error_code: 'invalid_credentials', msg: 'Invalid login credentials' });
     return json(200, session(String(email).toLowerCase()));
   }
   if (url.pathname === '/auth/v1/logout') return json(204);

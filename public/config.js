@@ -13,4 +13,6 @@ window.AU_CONFIG = {
   supabaseAnonKey: '',
   // true muestra «Entrar con cuenta Microsoft» (requiere configurar el proveedor Azure en Supabase)
   microsoft: false,
+  // false oculta «recibir un código por correo» (mientras no haya SMTP); se entra con contraseña.
+  emailCode: true,
 };

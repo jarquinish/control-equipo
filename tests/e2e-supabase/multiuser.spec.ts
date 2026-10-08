@@ -3,6 +3,7 @@ import { expect, test, type Page } from '@playwright/test';
 async function login(page: Page, email: string, code = '123456') {
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Iniciar sesión' })).toBeVisible();
+  await page.getByRole('button', { name: 'No tengo contraseña: recibir un código por correo' }).click();
   await page.getByLabel('Correo').fill(email);
   await page.getByRole('button', { name: 'Enviarme un código de acceso' }).click();
   await page.getByLabel('Código').fill(code);

@@ -5,6 +5,8 @@ interface RuntimeConfig {
   supabaseUrl?: string;
   supabaseAnonKey?: string;
   microsoft?: boolean;
+  /** false oculta «recibir un código por correo» (p. ej. mientras no hay SMTP); se entra con contraseña. */
+  emailCode?: boolean;
 }
 const runtime: RuntimeConfig = (globalThis as { AU_CONFIG?: RuntimeConfig }).AU_CONFIG ?? {};
 
@@ -16,6 +18,7 @@ const runtime: RuntimeConfig = (globalThis as { AU_CONFIG?: RuntimeConfig }).AU_
 export const SUPABASE_URL = runtime.supabaseUrl?.trim() || import.meta.env.VITE_SUPABASE_URL || '';
 export const SUPABASE_ANON_KEY = runtime.supabaseAnonKey?.trim() || import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 export const SUPABASE_MICROSOFT = runtime.microsoft ?? import.meta.env.VITE_SUPABASE_MICROSOFT === 'true';
+export const SUPABASE_EMAIL_CODE = runtime.emailCode ?? import.meta.env.VITE_SUPABASE_EMAIL_CODE !== 'false';
 
 /** El build de producción pide Supabase (`VITE_STORAGE=supabase`). */
 export function supabaseRequired(): boolean {

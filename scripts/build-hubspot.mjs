@@ -20,11 +20,13 @@ const config = `<script>
      Supabase → Project Settings → API
        supabaseUrl     = Project URL       (https://xxxx.supabase.co)
        supabaseAnonKey = anon public key   (pública por diseño; la seguridad la aplica el servidor)
-     microsoft: true sólo si se configuró «Entrar con cuenta Microsoft» en Supabase. */
+     microsoft: true sólo si se configuró «Entrar con cuenta Microsoft» en Supabase.
+     emailCode: true cuando el correo (SMTP) esté configurado; mientras tanto se entra con contraseña. */
   window.AU_CONFIG = {
     supabaseUrl: "",
     supabaseAnonKey: "",
-    microsoft: false
+    microsoft: false,
+    emailCode: false
   };
 </script>`;
 

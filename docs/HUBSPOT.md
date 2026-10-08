@@ -62,9 +62,17 @@ Tiempo estimado: 45–60 min la primera vez.
 3. **Publicar**. La plantilla ya pide a los buscadores no indexarla (`noindex`). Si su plan de HubSpot tiene *contenido privado / membresías*, pueden restringir además la página a personal de SOC.
 4. Copia la URL publicada y vuelve a Supabase: **Authentication → URL Configuration** → *Site URL* y *Redirect URLs* = esa URL.
 
+## Acceso con contraseña (sin enviar correos)
+
+Mientras no haya SMTP (Resend), se entra con **correo y contraseña** y no se envía ningún correo. En la plantilla deja `emailCode: false` (así viene).
+
+1. Supabase → **Authentication → Users → Add user → Create new user**: correo, contraseña y marca **Auto Confirm User** → **Create user**. Repite por cada persona y comparte la contraseña por un canal privado.
+2. Esa persona debe estar dada de alta en `au_members` (el administrador, con el SQL del paso 1; los demás, desde **Configuración → Accesos** en la herramienta). La cuenta sola no da acceso.
+3. Cuando Resend esté listo: plantilla con `{{ .Token }}`, `emailCode: true` y publica. Desde entonces también se podrá entrar con código.
+
 ## 4. Primer ingreso
 
-1. Abre la página → escribe el correo de administrador → recibe el código → **Entrar**. El primer ingreso crea las 4 áreas y la semana actual.
+1. Abre la página → correo y contraseña de administrador (o código por correo si `emailCode: true`) → **Entrar**. El primer ingreso crea las 4 áreas y la semana actual.
 2. **Configuración → Accesos**: agrega el correo de cada gerente con rol **Gerente** (y colaboradores si aplica).
 3. Cada gerente entra con su correo y usa **Actualizar mi área → Importar Excel de su área** (o el registro de su área en la Sesión 1). La carga queda guardada en Supabase y se refleja en el dashboard de todos.
 
