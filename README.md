@@ -138,22 +138,37 @@ Botón **Importar Excel** en *Actualizar mi área*, en el registro de cada área
 - **Traducciones**: Alto/Medio/Bajo y Alta/Media/Baja → 3/2/1 (el impacto queda marcado para clasificarse como Operación, Estrategia o Negocio); estados libres → los seis de la herramienta (p. ej. *Atorado* → En riesgo + bloqueo, *Casi terminado* → En curso); *Prioridad validada* distinta a la fórmula → ajuste de Dirección; *Prioridad IA* distinta → aviso.
 - **Personas**: un nombre por campo; «Laura / Marta» toma a la primera y muestra el texto original; «Laura» se une con «Laura Pérez» si es la única con ese nombre; áreas o equipos («Diseño», «Por validar») no se toman como personas. Las personas nuevas se dan de alta automáticamente.
 - **Compromisos**: la *Siguiente acción* (y la solución de cada bloqueo) se registra como compromiso cuando tiene responsable, fecha y hora; sin hora se usa la hora configurada en la vista previa (18:00 por omisión). Fechas como «Semana del 12 oct» o «Antes de 2026-10-14» se interpretan y se avisan; «Semanal» no es una fecha.
-- **Sin duplicados**: el ID de cada fila (p. ej. `CON-01`) se guarda en el proyecto; al volver a importar, las filas con ID o nombre existente en el área se omiten.
+- **Sin duplicados**: el ID de cada fila (p. ej. `CON-01`) se guarda en el proyecto; al volver a importar, las filas con ID o nombre existente en el área se omiten, o con **Actualizar prioridades** sólo se actualiza su ponderación (impacto, urgencia, dependencia, solicitante, frente).
+- **Columnas de prioridad**: *Solicitante* (todas las gerencias) y, sólo para Dirección, *Prioridad estratégica / operativa (Dirección)* con su motivo, *Iniciativa (matriz)* y *Validación directiva* (= Validado cierra el acuerdo). La columna *Prioridad validada* del formato anterior no se aplica: queda como **nota por revalidar**. Instrucciones para gerencias: [`docs/EXCEL_GERENCIAS.md`](docs/EXCEL_GERENCIAS.md).
 
-### Priorizar (ponderación)
+### Priorizar: dos ejes, matriz directiva y orden de atención
 
-```
-SCORE = IMPACTO + URGENCIA + DEPENDENCIA      (cada criterio 1–3)
-8–9 → P1    6–7 → P2    3–5 → P3
-```
+Cada proyecto tiene **dos prioridades independientes** y una clasificación integrada (detalle completo en [`docs/PRIORIZACION.md`](docs/PRIORIZACION.md)):
+
+| Eje | Cómo se obtiene |
+|---|---|
+| **Estratégica** (E) | P1 si el proyecto corresponde a una iniciativa estratégica de la **matriz directiva** de su gerencia. Fuera de la matriz: Negocio → P2 *candidato a P1, requiere validación directiva* · Estrategia → P2 · Operación → P3. |
+| **Operativa / urgente** (O) | P1 si corresponde a la matriz de urgencias de su gerencia. Fuera de ella: Urgencia + Dependencia + fecha compromiso (+2 vencida o ≤ 7 días · +1 entre 8 y 14) + bloqueado (+1): ≥ 7 → P1 · 5–6 → P2 · ≤ 4 → P3 (umbrales configurables). Sin fecha: +0 y aviso *requiere validación*. |
+
+| Clasificación | Regla | Orden de atención |
+|---|---|---|
+| **P1 Crítico** | E = P1 y O = P1 | Nivel 1 |
+| **P1 Urgente** | sólo O = P1 | Nivel 2 |
+| **P1 Estratégico** | sólo E = P1 | Nivel 3 (sube a 2 si lleva 7 días sin avance ni compromiso: *desatendido*) |
+| P2 / P3 | el mayor de los dos ejes | Nivel 4 / 5 |
+
+Desempates dentro de cada nivel: compromiso vencido → fecha compromiso más cercana → bloqueado → dependencia → impacto.
+
+- **Matriz directiva** (Configuración): iniciativas con sus variantes de nombre (sin acentos, mayúsculas ni años: «CONVENCIÓN SOC 2026» = «Convención») y qué es P1 estratégico / urgente en cada gerencia. *Brokers, Dirección Comercial y Dirección General* se reconocen por el campo **Solicitante**; si sólo aparecen en el nombre quedan **por validar**. Lo que marca la matriz no se degrada automáticamente.
+- **Validación directiva** (botón en el proyecto o la clasificación en el Paso 4): Dirección fija la prioridad de cada eje con **motivo obligatorio**; prevalece sobre el cálculo y queda en la **bitácora** (valor anterior, nuevo, motivo, fecha, responsable). Si la gerencia supera su límite (3 P1 Críticos + Urgentes y 3 P1 Estratégicos, configurable), se pregunta **qué prioridad desplaza** (regla 8).
+- **Acuerdo de prioridades**: tras la Weekly, Dirección lo cierra (Paso 4 o ficha del proyecto). Las gerencias siguen actualizando avance, compromisos y bloqueos, pero ya no impacto, urgencia, dependencia, solicitante ni frente; sólo Dirección. El servidor (Supabase) también lo impide.
+- **Score** (Impacto + Urgencia + Dependencia) se conserva como dato de la ponderación de la gerencia.
 
 | | 1 | 2 | 3 |
 |---|---|---|---|
 | Impacto | **Operación** – lo básico de ejecución | **Estrategia** – impacta los objetivos del área (posicionamiento de marca) | **Negocio** – venta a cliente, desarrollo de negocio de oficinas, atracción de franquicias o talento para nuevas oficinas |
 | Urgencia | Puede esperar | Debe avanzar esta semana | Deadline inmediato |
 | Dependencia | Prácticamente autónomo | Depende de otra área/persona | Varias áreas / Dirección / tercero |
-
-**Ajuste de Dirección**: botón *Ajuste Dirección* (o la prioridad en el Paso 4). Se conservan `prioridadCalculada`, `prioridadFinal`, `ajusteDireccion = true` y el motivo. Si el cambio crea un nuevo P1, el sistema pregunta **qué prioridad desplaza** (regla 8) y registra la decisión. Sólo roles *Dirección* y *Administrador* pueden ajustar.
 
 ### Iniciar la Weekly (Modo Junta)
 

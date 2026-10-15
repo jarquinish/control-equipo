@@ -48,6 +48,57 @@ do $$ declare ok boolean := false; begin
   assert ok, 'gerente no da accesos';
 end $$;
 
+-- 2b. Prioridad (0002): bitácora y acuerdo de prioridades
+select pg_temp.as_user('admin@soc.mx') \gset
+insert into public.au_records (collection, id, data) values
+  ('priorityLog', 'l1', '{"id":"l1","projectId":"p1","tipo":"prioridad","eje":"estrategica","anterior":"P2","nuevo":"P1","motivo":"Matriz","fuente":"pantalla"}'),
+  ('projects', 'p3', '{"id":"p3","nombre":"SOC TV","areaId":"a1","impacto":3,"urgencia":3,"dependencia":2,"prioridadDireccion":{"estrategica":"P1"},"acuerdo":{"bloqueado":true}}');
+do $$ begin assert (select clasificacion is null from public.au_projects_v where id = 'p3'), 'vista con columnas nuevas'; end $$;
+do $$ begin assert (select motivo from public.au_priority_log_v where id = 'l1') = 'Matriz', 'vista de bitácora'; end $$;
+do $$ declare ok boolean := false; begin
+  begin update public.au_records set data = jsonb_set(data, '{motivo}', '"otro"') where id = 'l1';
+  exception when insufficient_privilege then ok := true; end;
+  assert ok, 'nadie modifica la bitácora (ni Dirección)';
+end $$;
+select pg_temp.as_user('gerente@soc.mx') \gset
+do $$ declare ok boolean := false; begin
+  begin insert into public.au_records (collection, id, data) values ('priorityLog', 'l2', '{"id":"l2"}');
+  exception when insufficient_privilege then ok := true; end;
+  assert ok, 'gerente no escribe en la bitácora';
+end $$;
+do $$ declare ok boolean := false; begin
+  begin delete from public.au_records where id = 'l1';
+  exception when insufficient_privilege then ok := true; end;
+  assert ok, 'gerente no borra la bitácora';
+end $$;
+do $$ declare ok boolean := false; begin
+  begin update public.au_records set data = jsonb_set(data, '{prioridadDireccion}', '{"estrategica":"P1"}') where id = 'p1';
+  exception when insufficient_privilege then ok := true; end;
+  assert ok, 'gerente no fija prioridad directiva';
+end $$;
+do $$ declare ok boolean := false; begin
+  begin update public.au_records set data = jsonb_set(data, '{urgencia}', '1') where id = 'p3';
+  exception when insufficient_privilege then ok := true; end;
+  assert ok, 'acuerdo cerrado: gerente no cambia la ponderación';
+end $$;
+do $$ declare ok boolean := false; begin
+  begin update public.au_records set data = data - 'acuerdo' where id = 'p3';
+  exception when insufficient_privilege then ok := true; end;
+  assert ok, 'gerente no reabre el acuerdo';
+end $$;
+-- Con el acuerdo cerrado la gerencia sigue actualizando lo demás (estado, clasificación calculada…)
+update public.au_records set data = jsonb_set(data, '{estado}', '"en_riesgo"') || '{"clasif":{"integrada":"P1C"}}' where id = 'p3';
+-- Y sin acuerdo cerrado sí cambia su ponderación
+update public.au_records set data = jsonb_set(data, '{urgencia}', '2') where id = 'p1';
+do $$ declare ok boolean := false; begin
+  begin insert into public.au_records (collection, id, data) values ('projects', 'p4', '{"id":"p4","acuerdo":{"bloqueado":true}}');
+  exception when insufficient_privilege then ok := true; end;
+  assert ok, 'gerente no crea proyectos con acuerdo cerrado';
+end $$;
+select pg_temp.as_user('admin@soc.mx') \gset
+update public.au_records set data = jsonb_set(data, '{urgencia}', '1') where id = 'p3';
+do $$ begin assert (select clasificacion from public.au_projects_v where id = 'p3') = 'P1C', 'Dirección cambia con el acuerdo cerrado'; end $$;
+
 -- 3. Usuario dado de baja y desconocido: no ven nada ni escriben
 select pg_temp.as_user('baja@soc.mx') \gset
 do $$ begin assert (select count(*) from public.au_records) = 0, 'baja no lee'; end $$;
@@ -69,8 +120,8 @@ end $$;
 
 -- 5. Restaurar respaldo (admin)
 do $$ begin
-  assert public.au_replace_all('{"areas":[{"id":"a1","nombre":"Diseño"}],"projects":[{"id":"p2","nombre":"Nuevo"}],"desconocida":[{"id":"z"}]}') = 2, 'restaura 2';
-  assert (select count(*) from public.au_records) = 2, 'reemplazó todo';
+  assert public.au_replace_all('{"areas":[{"id":"a1","nombre":"Diseño"}],"projects":[{"id":"p2","nombre":"Nuevo"}],"priorityLog":[{"id":"l9","projectId":"p2"}],"desconocida":[{"id":"z"}]}') = 3, 'restaura 3';
+  assert (select count(*) from public.au_records) = 3, 'reemplazó todo (incluida la bitácora)';
   assert not exists (select 1 from public.au_records where id = 'z'), 'ignora colecciones desconocidas';
 end $$;
 

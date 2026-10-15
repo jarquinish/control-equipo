@@ -75,9 +75,79 @@ export interface Project extends BaseEntity {
   dependeDe?: string;
   /** ID de origen (p. ej. CON-01) cuando el proyecto vino de un inventario en Excel. */
   ref?: string;
+  /** Quién solicita el trabajo (p. ej. Brokers, Dirección Comercial). */
+  solicitante?: string;
+  /** Proyecto padre / frente al que pertenece. */
+  frente?: string;
+  /** Decisiones de Dirección sobre el vínculo con iniciativas de la matriz. */
+  vinculos?: { iniciativa: string; estado: 'validado' | 'descartado'; por?: ID; fecha?: ISODateTime }[];
+  /** Prioridades establecidas por Dirección (prevalecen sobre el cálculo). */
+  prioridadDireccion?: { estrategica?: Priority; operativa?: Priority; motivoEstrategica?: string; motivoOperativa?: string };
+  /** Acuerdo de prioridad cerrado: sólo Dirección puede cambiar la ponderación. */
+  acuerdo?: { bloqueado: boolean; por?: ID; fecha?: ISODateTime };
+  /** Ajuste del modelo anterior pendiente de revalidar por Dirección. */
+  notaRevalidar?: string;
+  /** Clasificación calculada (prioridad estratégica y operativa). */
+  clasif?: ProjectClasif;
   createdWeekId?: ID;
   closedAt?: ISODateTime;
   updatedBy?: ID;
+}
+
+export type Clasificacion = 'P1C' | 'P1U' | 'P1E' | 'P2' | 'P3';
+export type PriorityAxis = 'estrategica' | 'operativa';
+
+export interface ProjectClasif {
+  estrategica: Priority;
+  operativa: Priority;
+  estrategicaCalc: Priority;
+  operativaCalc: Priority;
+  fuenteEstrategica: 'matriz' | 'criterios' | 'direccion';
+  fuenteOperativa: 'matriz' | 'criterios' | 'direccion';
+  motivoEstrategica: string;
+  motivoOperativa: string;
+  integrada: Clasificacion;
+  integradaCalc: Clasificacion;
+  /** Iniciativas de la matriz vinculadas (claves). */
+  iniciativas: string[];
+  /** Coincidencias ambiguas que Dirección debe validar. */
+  porValidar: string[];
+  candidatoP1: boolean;
+  avisos: string[];
+  scoreOperativo?: number;
+  fechaRef?: ISODate;
+  calculadoEl: ISODate;
+}
+
+export interface Iniciativa {
+  key: string;
+  nombre: string;
+  /** Variantes de nombre que la identifican (se comparan sin acentos ni mayúsculas). */
+  alias: string[];
+  /** `solicitante`: se reconoce por el campo Solicitante (Brokers, Dirección Comercial…). */
+  tipo: 'proyecto' | 'solicitante';
+  /** Término genérico: una mención en el nombre requiere validación. */
+  generica?: boolean;
+}
+
+export interface PriorityMatrix {
+  iniciativas: Iniciativa[];
+  reglas: { area: string; eje: 'estrategico' | 'urgente'; iniciativa: string }[];
+}
+
+/** Bitácora inalterable de decisiones de prioridad. */
+export interface PriorityLog {
+  id: ID;
+  projectId: ID;
+  areaId: ID;
+  tipo: 'prioridad' | 'acuerdo' | 'iniciativa';
+  eje?: PriorityAxis;
+  anterior?: string;
+  nuevo: string;
+  motivo: string;
+  fuente: 'pantalla' | 'excel' | 'junta';
+  responsable?: ID;
+  createdAt: ISODateTime;
 }
 
 export interface Week {
@@ -107,6 +177,10 @@ export interface WeeklyUpdate {
   prioridad: Priority;
   prioridadCalculada: Priority;
   ajusteDireccion: boolean;
+  /** Prioridad estratégica / operativa / clasificación integrada (desde el modelo de dos ejes). */
+  prioridadEstrategica?: Priority;
+  prioridadOperativa?: Priority;
+  clasificacion?: Clasificacion;
   eisenhower: Quadrant;
   bloqueado: boolean;
   fechaObjetivo?: ISODate;
@@ -268,6 +342,15 @@ export interface Criteria {
   umbralReprogramaciones: number;
   /** Semanas abiertas a partir de las cuales un proyecto se considera de larga duración. */
   semanasProyectoLargo: number;
+  /** Máximo recomendado por gerencia de P1 Críticos + P1 Urgentes. */
+  maxP1UrgentesPorArea: number;
+  /** Máximo recomendado por gerencia de P1 Estratégicos. */
+  maxP1EstrategicosPorArea: number;
+  /** Días sin actividad para marcar un P1 Estratégico como desatendido. */
+  diasDesatendido: number;
+  /** Puntuación operativa mínima para P1 y para P2. */
+  umbralOperativoP1: number;
+  umbralOperativoP2: number;
 }
 
 export interface Settings {
@@ -278,6 +361,10 @@ export interface Settings {
   statusLabels: Record<ProjectStatus, string>;
   criteria: Criteria;
   orgName: string;
+  /** Matriz directiva de prioridades (por gerencia). */
+  priorityMatrix?: PriorityMatrix;
+  /** 2 = modelo de prioridad estratégica + operativa ya aplicado a los datos. */
+  priorityModel?: number;
   schemaVersion: number;
   updatedAt: ISODateTime;
 }
@@ -295,6 +382,7 @@ export interface DbData {
   decisions: Decision[];
   snapshots: WeekSnapshot[];
   settings: Settings[];
+  priorityLog: PriorityLog[];
 }
 
 export type CollectionName = keyof DbData;
@@ -313,4 +401,5 @@ export const COLLECTIONS: CollectionName[] = [
   'decisions',
   'snapshots',
   'settings',
+  'priorityLog',
 ];

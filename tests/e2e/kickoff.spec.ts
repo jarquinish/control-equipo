@@ -76,7 +76,10 @@ test('Sesión 1: metodología → cada área (registro + pasos 2–7) → resume
   await expect(page.getByRole('radio', { name: 'Impacto de Campaña ¿Qué es SOC? 3: Negocio' })).toHaveCount(1);
   await page.getByRole('radio', { name: /^Urgencia de Campaña ¿Qué es SOC\? 3:/ }).check({ force: true });
   await page.getByRole('radio', { name: /^Impacto de Campaña ¿Qué es SOC\? 3:/ }).check({ force: true });
-  await expect(page.getByTestId('prio-row').filter({ hasText: 'Campaña ¿Qué es SOC?' }).locator('.score-num')).toHaveText('8');
+  const qes = page.getByTestId('prio-row').filter({ hasText: 'Campaña ¿Qué es SOC?' });
+  await expect(qes.locator('.score-num')).toHaveText('8');
+  await expect(qes).toHaveAttribute('data-clasif', 'P1E'); // matriz estratégica de Contenido
+  await expect(page.getByTestId('prio-row').filter({ hasText: 'SOC TV Temporada 2' })).toHaveAttribute('data-clasif', 'P1C');
   await page.getByRole('button', { name: 'Confirmar ponderación de SOC TV Temporada 2' }).click();
   await expect(page.getByTestId('ponder-status')).toContainText('✓ Los 2 proyectos');
   await expect(page.getByTestId('live-status')).toContainText('1');
@@ -85,10 +88,11 @@ test('Sesión 1: metodología → cada área (registro + pasos 2–7) → resume
   await next(page);
   await expect(stage(page)).toHaveText('CONTENIDO · PASO 5 DE 7');
   const card = page.getByTestId('detect-card');
-  await expect(card).toContainText('Campaña ¿Qué es SOC?');
-  await card.getByRole('button', { name: 'Avanza' }).click();
+  // SOC TV es P1 Crítico en Contenido (matriz directiva): se revisa primero
   await expect(card).toContainText('SOC TV Temporada 2');
   await card.getByRole('button', { name: 'Bloqueado' }).click();
+  await expect(card).toContainText('Campaña ¿Qué es SOC?');
+  await card.getByRole('button', { name: 'Avanza' }).click();
 
   // Paso 6 · Destrabar y comprometer
   await next(page);
@@ -120,7 +124,7 @@ test('Sesión 1: metodología → cada área (registro + pasos 2–7) → resume
   ];
   for (const [area, proyecto, total] of plan) {
     await expect(stage(page)).toHaveText(`${area} · REGISTRO DE PROYECTOS`);
-    await register(page, proyecto);
+    await register(page, proyecto, { responsable: true }); // Convención es P1 Urgente por la matriz: necesita responsable
     await next(page);
     await expect(stage(page)).toHaveText(`${area} · PASO 2 DE 7`);
     await expect(page.locator('.vis-item')).toHaveCount(total);

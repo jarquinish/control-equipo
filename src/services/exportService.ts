@@ -1,5 +1,7 @@
 import { BLOCK_STATUS_LABELS, COMMITMENT_STATUS_LABELS, QUADRANT_LABELS } from '../domain/constants';
-import { commitmentDisplayStatus, dependencyLabel, getSettings, personName } from '../domain/selectors';
+import { toISODate } from '../domain/dates';
+import { attentionOrder, CLASIFICACION_LABELS, FUENTE_LABELS } from '../domain/priority';
+import { commitmentDisplayStatus, dependencyLabel, getSettings, isActiveProject, personName } from '../domain/selectors';
 import type { DbData } from '../domain/types';
 
 function cell(v: unknown): string {
@@ -12,16 +14,48 @@ export function toCsv(headers: string[], rows: unknown[][]): string {
   return '﻿' + [headers, ...rows].map((r) => r.map(cell).join(',')).join('\r\n') + '\r\n';
 }
 
-export function projectsCsv(db: DbData): string {
+export function projectsCsv(db: DbData, now: Date = new Date()): string {
   const s = getSettings(db);
   const area = (id: string) => db.areas.find((a) => a.id === id)?.nombre ?? '';
+  const order = attentionOrder(db, db.projects.filter(isActiveProject), toISODate(now), s.criteria.diasDesatendido);
+  const ini = new Map((s.priorityMatrix?.iniciativas ?? []).map((i) => [i.key, i.nombre]));
+  const names = (keys: string[] = []) => keys.map((k) => ini.get(k) ?? k).join(' · ');
+  // Las columnas nuevas van al final para no romper reportes existentes.
   return toCsv(
-    ['Proyecto', 'Descripción', 'Área', 'Responsable', 'Impacto', 'Urgencia', 'Dependencia', 'Score', 'Prioridad calculada', 'Prioridad final', 'Ajuste Dirección', 'Motivo ajuste', 'Eisenhower', 'Estado', 'Bloqueado', 'Depende de', 'Fecha objetivo', 'Actualizado'],
-    db.projects.map((p) => [
-      p.nombre, p.descripcion, area(p.areaId), personName(db.people, p.responsable, ''), p.impacto, p.urgencia, p.dependencia, p.score,
-      p.prioridadCalculada, p.prioridadFinal, p.ajusteDireccion ? 'Sí' : 'No', p.motivoAjuste ?? '', QUADRANT_LABELS[p.eisenhower],
-      s.statusLabels[p.estado], p.bloqueado ? 'Sí' : 'No', p.dependeDe ? dependencyLabel(db, p.dependeDe) : '', p.fechaObjetivo ?? '', p.updatedAt,
-    ]),
+    [
+      'Proyecto', 'Descripción', 'Área', 'Responsable', 'Impacto', 'Urgencia', 'Dependencia', 'Score', 'Prioridad calculada', 'Prioridad final', 'Ajuste Dirección', 'Motivo ajuste', 'Eisenhower', 'Estado', 'Bloqueado', 'Depende de', 'Fecha objetivo', 'Actualizado',
+      'ID', 'Solicitante', 'Frente', 'Prioridad estratégica', 'Fuente estratégica', 'Motivo estratégica', 'Prioridad operativa', 'Fuente operativa', 'Motivo operativa', 'Clasificación', 'Orden de atención', 'Nivel', 'Iniciativas reconocidas', 'Iniciativas por validar', 'Acuerdo cerrado', 'Nota por revalidar', 'Avisos',
+    ],
+    db.projects.map((p) => {
+      const c = p.clasif;
+      const o = order.get(p.id);
+      return [
+        p.nombre, p.descripcion, area(p.areaId), personName(db.people, p.responsable, ''), p.impacto, p.urgencia, p.dependencia, p.score,
+        p.prioridadCalculada, p.prioridadFinal, p.ajusteDireccion ? 'Sí' : 'No', p.motivoAjuste ?? '', QUADRANT_LABELS[p.eisenhower],
+        s.statusLabels[p.estado], p.bloqueado ? 'Sí' : 'No', p.dependeDe ? dependencyLabel(db, p.dependeDe) : '', p.fechaObjetivo ?? '', p.updatedAt,
+        p.ref ?? '', p.solicitante ?? '', p.frente ?? '',
+        c?.estrategica ?? '', c ? FUENTE_LABELS[c.fuenteEstrategica] : '', c?.motivoEstrategica ?? '',
+        c?.operativa ?? '', c ? FUENTE_LABELS[c.fuenteOperativa] : '', c?.motivoOperativa ?? '',
+        c ? CLASIFICACION_LABELS[c.integrada] : '', o?.posicion ?? '', o?.nivel ?? '', names(c?.iniciativas), names(c?.porValidar),
+        p.acuerdo?.bloqueado ? 'Sí' : 'No', p.notaRevalidar ?? '', c?.avisos.join(' ') ?? '',
+      ];
+    }),
+  );
+}
+
+/** Bitácora de cambios de prioridad (valor anterior, nuevo, motivo, fecha y responsable). */
+export function priorityLogCsv(db: DbData): string {
+  const proj = (id: string) => db.projects.find((p) => p.id === id);
+  const area = (id?: string) => db.areas.find((a) => a.id === id)?.nombre ?? '';
+  const fuente = { pantalla: 'Pantalla', excel: 'Excel', junta: 'Weekly' } as const;
+  return toCsv(
+    ['Fecha', 'Proyecto', 'Área', 'Tipo', 'Eje', 'Valor anterior', 'Valor nuevo', 'Motivo', 'Origen', 'Responsable'],
+    [...db.priorityLog]
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+      .map((l) => [
+        l.createdAt, proj(l.projectId)?.nombre ?? '', area(l.areaId), l.tipo, l.eje === 'estrategica' ? 'Estratégica' : l.eje === 'operativa' ? 'Operativa' : '',
+        l.anterior ?? '', l.nuevo, l.motivo, fuente[l.fuente], personName(db.people, l.responsable, ''),
+      ]),
   );
 }
 

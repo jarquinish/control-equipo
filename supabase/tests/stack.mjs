@@ -74,7 +74,7 @@ export async function startStack({ members = [] } = {}) {
   }
   const psql = (args) => execFileSync('psql', ['-X', '-q', '-v', 'ON_ERROR_STOP=1', '-h', dir, '-p', String(PG_PORT), '-U', 'postgres', '-d', 'postgres', ...args], { stdio: 'pipe' }).toString();
   psql(['-f', join(ROOT, 'supabase/tests/supabase_stub.sql')]);
-  psql(['-f', join(ROOT, 'supabase/migrations/0001_alignment_unblock.sql')]);
+  for (const m of readdirSync(join(ROOT, 'supabase/migrations')).filter((f) => f.endsWith('.sql')).sort()) psql(['-f', join(ROOT, 'supabase/migrations', m)]);
   for (const [email, rol] of members) psql(['-c', `insert into public.au_members (email, rol) values ('${email}', '${rol}')`]);
 
   const conf = join(dir, 'postgrest.conf');

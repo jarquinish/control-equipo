@@ -6,6 +6,7 @@ import type { blockService } from './blockService';
 import type { commitmentService } from './commitmentService';
 import type { ServiceContext } from './context';
 import type { peopleService } from './peopleService';
+import type { priorityService } from './priorityService';
 import type { projectService } from './projectService';
 
 interface Deps {
@@ -13,6 +14,7 @@ interface Deps {
   projects: ReturnType<typeof projectService>;
   blocks: ReturnType<typeof blockService>;
   commitments: ReturnType<typeof commitmentService>;
+  priority: ReturnType<typeof priorityService>;
 }
 
 export interface ImportResult {
@@ -27,7 +29,7 @@ export function importService(ctx: ServiceContext, deps: Deps) {
   /** Ejecuta el plan de importación en un solo lote. */
   const apply = (plan: Plan, origen: UpdateOrigin = 'area'): ImportResult => {
     if (!ctx.activeWeek()) throw new ValidationError({ semana: 'Abre una semana antes de importar.' });
-    if (!plan.projects.length) throw new ValidationError({ archivo: 'No hay filas para importar con la selección actual.' });
+    if (!plan.projects.length && !plan.updates.length) throw new ValidationError({ archivo: 'No hay filas para importar con la selección actual.' });
     const result: ImportResult = { proyectos: 0, actualizados: 0, bloqueos: 0, compromisos: 0, personas: 0 };
     return ctx.store.batch(() => {
       for (const p of plan.newPeople) {
@@ -61,13 +63,16 @@ export function importService(ctx: ServiceContext, deps: Deps) {
               estado: pp.estado,
               dependeDe: pp.dependeDe,
               ref: pp.ref,
+              solicitante: pp.solicitante,
+              frente: pp.frente,
             },
             { origen },
           );
           projectId = created.id;
-          if (pp.override) deps.projects.setOverride(projectId, pp.override.prioridad, pp.override.motivo, { origen });
+          if (pp.notaRevalidar) ctx.repos.projects.update(projectId, { notaRevalidar: pp.notaRevalidar });
           result.proyectos++;
         }
+        applyDirectives(projectId, pp);
         for (const b of pp.blocks) {
           const block = deps.blocks.create(
             {
@@ -95,8 +100,22 @@ export function importService(ctx: ServiceContext, deps: Deps) {
           result.compromisos++;
         }
       }
+      for (const u of plan.updates) {
+        if (Object.keys(u.patch).length) deps.projects.update(u.projectId, u.patch, { origen });
+        applyDirectives(u.projectId, u);
+        result.actualizados++;
+      }
+      deps.priority.syncAll();
       return result;
     });
+  };
+
+  /** Lo que sólo Dirección fija desde el archivo: prioridad por eje, iniciativa y cierre del acuerdo. */
+  const applyDirectives = (projectId: string, d: Pick<Plan['updates'][number], 'directiva' | 'iniciativa' | 'cerrarAcuerdo'>) => {
+    if (d.iniciativa) deps.priority.setVinculo(projectId, d.iniciativa, 'validado', 'Iniciativa indicada en el inventario', 'excel');
+    if (d.directiva?.estrategica) deps.priority.setDirective(projectId, 'estrategica', d.directiva.estrategica, d.directiva.motivoEstrategica ?? '', 'excel');
+    if (d.directiva?.operativa) deps.priority.setDirective(projectId, 'operativa', d.directiva.operativa, d.directiva.motivoOperativa ?? '', 'excel');
+    if (d.cerrarAcuerdo) deps.priority.setLock([projectId], true, 'Validación directiva en el inventario', 'excel');
   };
 
   return { apply };
@@ -127,11 +146,14 @@ export function buildInventoryTemplate(areas: string[]): Uint8Array {
       [{ v: 'Proyectos, no actividades', s: 3 }, { v: 'Tipo «Proyecto» o «Subproyecto» se carga como proyecto. «Actividad» u «Operación recurrente» se agrupa dentro del proyecto indicado en «Proyecto padre / frente».', s: 3 }],
       [{ v: 'Una persona responsable', s: 3 }, { v: 'Owner operativo, Responsable siguiente acción y Responsable solución: UN nombre por celda (nombre y apellido la primera vez).', s: 3 }],
       [{ v: 'Impacto', s: 3 }, { v: 'Operación = lo básico de ejecución · Estrategia = impacta los objetivos del área (posicionamiento de marca) · Negocio = impacta la venta a cliente, el desarrollo de negocio de oficinas o la atracción de franquicias o talento para nuevas oficinas.', s: 3 }],
-      [{ v: 'Ponderación', s: 3 }, { v: 'Score = Impacto + Urgencia + Dependencia (1–3 cada uno). 8–9 → P1 · 6–7 → P2 · 3–5 → P3. «Prioridad validada» sólo si la gerencia decide otra prioridad (queda como ajuste de Dirección).', s: 3 }],
+      [{ v: 'Ponderación de la gerencia', s: 3 }, { v: 'Impacto, Urgencia y Dependencia (1–3). Con ellos, el Solicitante y la fecha compromiso la herramienta calcula dos prioridades: ESTRATÉGICA (matriz directiva o impacto) y OPERATIVA (matriz de urgencias o Urgencia + Dependencia + cercanía de la fecha + bloqueo).', s: 3 }],
+      [{ v: 'Clasificación', s: 3 }, { v: 'P1 Crítico = P1 estratégico y P1 operativo · P1 Urgente = sólo operativo · P1 Estratégico = sólo estratégico · P2 · P3. No la escribas: se calcula y Dirección la valida.', s: 3 }],
+      [{ v: 'Solicitante', s: 3 }, { v: 'Quién pide el trabajo. Escribe «Brokers», «Dirección Comercial» o «Dirección General» cuando aplique: así se reconoce la matriz de urgencias. Si sólo lo mencionas en el nombre, queda por validar.', s: 3 }],
+      [{ v: 'Columnas de Dirección', s: 3 }, { v: 'Prioridad estratégica (Dirección), Prioridad operativa (Dirección), sus motivos, Iniciativa (matriz) y Validación directiva sólo las aplica Dirección (con motivo obligatorio). Si las llena una gerencia, se ignoran.', s: 3 }],
       [{ v: 'Compromisos', s: 3 }, { v: 'La siguiente acción se registra como compromiso cuando tiene responsable, fecha (AAAA-MM-DD) y hora (HH:MM). Igual para la solución de un bloqueo.', s: 3 }],
       [{ v: 'Bloqueos', s: 3 }, { v: '¿Bloqueado? = Sí, describe qué lo bloquea, qué se necesita, de quién depende y quién lo resuelve.', s: 3 }],
       [{ v: 'Validación', s: 3 }, { v: 'Sólo se importan las filas con «Validación gerencia» = Validado o Modificado. Descartado no se importa.', s: 3 }],
-      [{ v: 'Volver a importar', s: 3 }, { v: 'Las filas cuyo ID o nombre ya existe en el área se omiten para no duplicar.', s: 3 }],
+      [{ v: 'Volver a importar', s: 3 }, { v: 'Las filas cuyo ID o nombre ya existe en el área no se duplican: se omiten, o se actualizan sólo sus datos de prioridad si eliges «Actualizar prioridades». No cambies los ID.', s: 3 }],
       [],
       [
         { v: 'Columna', s: 1 },

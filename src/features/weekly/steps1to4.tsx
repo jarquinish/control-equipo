@@ -1,12 +1,14 @@
 import { useMemo, useState } from 'react';
-import { AlertTriangle, ArrowUpCircle, Check, CheckCircle2, RefreshCw, Scale, X, ArrowDownUp } from 'lucide-react';
+import { AlertTriangle, ArrowUpCircle, Check, CheckCircle2, RefreshCw, Scale, X, ArrowDownUp, Lock, LockOpen } from 'lucide-react';
 import { DEPENDENCY_LABELS, IMPACT_HINTS, IMPACT_LABELS, LEVELS, URGENCY_LABELS } from '../../domain/constants';
 import { fmtDate, fmtDeadline } from '../../domain/dates';
 import { areaUpdateFor, commitmentDisplayStatus, isActiveProject, isOpenCommitment, personName, sortProjectsByPriority, type WeekData } from '../../domain/selectors';
 import { reviewCommitments } from '../../domain/weekly';
 import type { Level, Session } from '../../domain/types';
-import { useApp, useDb, useServices, useSettings } from '../../state/app';
-import { AreaDot, BlockedChip, CommitmentStatusChip, PriorityBadge, ProjectStatusChip } from '../../ui/badges';
+import { can } from '../../domain/permissions';
+import { CLASIFICACIONES } from '../../domain/priority';
+import { useApp, useAttention, useCurrentUser, useDb, useServices, useSettings } from '../../state/app';
+import { AreaDot, AxisBadge, BlockedChip, ClassBadge, CommitmentStatusChip, LockBadge, PriorityBadge, ProjectStatusChip } from '../../ui/badges';
 import { EmptyState, Question } from '../../ui/common';
 import { useFeedback } from '../../ui/feedback';
 import { LevelPicker } from '../../ui/forms';
@@ -165,13 +167,17 @@ export function Step4Prioritize({ session, data }: StepProps) {
   const db = useDb();
   const settings = useSettings();
   const services = useServices();
+  const user = useCurrentUser();
+  const attention = useAttention();
   const modals = useModals();
-  const { run } = useFeedback();
+  const { run, confirm } = useFeedback();
+  const director = can(user, 'project.override');
   const active = useMemo(() => data.projects.filter(isActiveProject), [data.projects]);
-  const sortIds = () => [...active].sort((a, b) => b.score - a.score || sortProjectsByPriority(a, b)).map((p) => p.id);
+  const pos = (id: string) => attention.get(id)?.posicion ?? 1e9;
+  const sortIds = () => [...active].sort((a, b) => pos(a.id) - pos(b.id) || sortProjectsByPriority(a, b)).map((p) => p.id);
   const [order, setOrder] = useState<string[]>(sortIds);
   const rows = [...order.map((id) => active.find((p) => p.id === id)).filter((p): p is NonNullable<typeof p> => !!p), ...active.filter((p) => !order.includes(p.id))];
-  const counts = { P1: active.filter((p) => p.prioridadFinal === 'P1').length, P2: active.filter((p) => p.prioridadFinal === 'P2').length, P3: active.filter((p) => p.prioridadFinal === 'P3').length };
+  const counts = Object.fromEntries(CLASIFICACIONES.map((c) => [c, active.filter((p) => p.clasif?.integrada === c).length])) as Record<(typeof CLASIFICACIONES)[number], number>;
 
   const kickoff = session.tipo === 'arranque';
   const pondered = new Set(session.ponderados ?? []);
@@ -183,19 +189,55 @@ export function Step4Prioritize({ session, data }: StepProps) {
       }),
     );
   const pending = active.filter((p) => !pondered.has(p.id));
+  const { maxP1UrgentesPorArea: maxU, maxP1EstrategicosPorArea: maxE } = settings.criteria;
+  const excesos = db.areas
+    .map((a) => {
+      const own = active.filter((p) => p.areaId === a.id);
+      const u = own.filter((p) => p.clasif?.integrada === 'P1C' || p.clasif?.integrada === 'P1U').length;
+      const e = own.filter((p) => p.clasif?.integrada === 'P1E').length;
+      return { a, u, e };
+    })
+    .filter((x) => x.u > maxU || x.e > maxE);
+  const abiertos = active.filter((p) => !p.acuerdo?.bloqueado);
+
+  const cerrarAcuerdo = async () => {
+    const ok = await confirm({
+      title: 'Cerrar acuerdo de prioridades',
+      message: (
+        <>
+          <p>
+            Se cierra el acuerdo de los <strong>{abiertos.length}</strong> proyectos activos de esta vista. Las gerencias ya no podrán cambiar impacto, urgencia, dependencia, solicitante ni frente; sólo Dirección.
+          </p>
+          <p>Avance, compromisos y bloqueos siguen editables. Puedes reabrir un proyecto desde su ficha.</p>
+        </>
+      ),
+      confirmLabel: 'Cerrar acuerdo',
+    });
+    if (ok) run(() => services.priority.setLock(abiertos.map((p) => p.id), true, 'Acuerdo de prioridades de la Weekly', 'junta'), 'Acuerdo de prioridades cerrado');
+  };
 
   return (
     <div className="step">
       <div className="prio-summary">
-        {(['P1', 'P2', 'P3'] as const).map((p) => (
-          <div key={p} className={`prio-count prio-count-${p.toLowerCase()}`}>
-            <PriorityBadge p={p} size="lg" />
-            <strong data-testid={`count-${p}`}>{counts[p]}</strong>
+        {CLASIFICACIONES.map((c) => (
+          <div key={c} className={`prio-count prio-count-${c.toLowerCase()}`}>
+            <ClassBadge c={c} size="lg" />
+            <strong data-testid={`count-${c}`}>{counts[c]}</strong>
           </div>
         ))}
         <button className="btn btn-ghost btn-sm" onClick={() => setOrder(sortIds())}>
-          <ArrowDownUp size={15} aria-hidden /> Reordenar por score
+          <ArrowDownUp size={15} aria-hidden /> Reordenar por orden de atención
         </button>
+        {director && abiertos.length > 0 && (
+          <button className="btn btn-secondary btn-sm" onClick={cerrarAcuerdo} data-testid="close-agreement">
+            <Lock size={15} aria-hidden /> Cerrar acuerdo de prioridades
+          </button>
+        )}
+        {director && active.length > 0 && abiertos.length === 0 && (
+          <span className="small muted">
+            <LockOpen size={14} aria-hidden /> Acuerdo cerrado: reabre un proyecto desde su ficha.
+          </span>
+        )}
       </div>
       {kickoff && active.length > 0 && (
         <p className={`alert ${pending.length ? 'alert-yellow' : 'alert-green'}`} data-testid="ponder-status">
@@ -209,11 +251,11 @@ export function Step4Prioritize({ session, data }: StepProps) {
           )}
         </p>
       )}
-      {counts.P1 > settings.criteria.maxP1 && (
-        <p className="alert alert-yellow big">
-          <AlertTriangle size={20} aria-hidden /> No todo puede ser P1: hay {counts.P1} (recomendado ≤ {settings.criteria.maxP1}). ¿Qué prioridad desplaza?
+      {excesos.map(({ a, u, e }) => (
+        <p key={a.id} className="alert alert-yellow big" data-testid="p1-limit">
+          <AlertTriangle size={20} aria-hidden /> No todo puede ser P1: {a.nombre} tiene {[u > maxU ? `${u} P1 Críticos/Urgentes (máx. ${maxU})` : '', e > maxE ? `${e} P1 Estratégicos (máx. ${maxE})` : ''].filter(Boolean).join(' y ')}. ¿Qué prioridad desplaza?
         </p>
-      )}
+      ))}
       <dl className="impact-legend small" data-testid="impact-legend">
         {LEVELS.map((l) => (
           <div key={l}>
@@ -228,46 +270,67 @@ export function Step4Prioritize({ session, data }: StepProps) {
         <table className="table prio-table">
           <thead>
             <tr>
+              <th scope="col" className="num">
+                Orden
+              </th>
               <th scope="col">Proyecto</th>
               <th scope="col">Impacto</th>
               <th scope="col">Urgencia</th>
               <th scope="col">Dependencia</th>
-              <th scope="col" className="num">Score</th>
-              <th scope="col">Calculada</th>
-              <th scope="col">Final</th>
+              <th scope="col" className="num">
+                Score
+              </th>
+              <th scope="col" title="Prioridad estratégica">
+                E
+              </th>
+              <th scope="col" title="Prioridad operativa (urgente)">
+                O
+              </th>
+              <th scope="col">Clasificación</th>
               {kickoff && <th scope="col">Ponderación</th>}
             </tr>
           </thead>
           <tbody>
             {rows.map((p) => {
               const area = db.areas.find((a) => a.id === p.areaId);
+              const c = p.clasif;
+              const locked = !!p.acuerdo?.bloqueado && !director;
               return (
-                <tr key={p.id} data-testid="prio-row">
+                <tr key={p.id} data-testid="prio-row" data-clasif={c?.integrada} className={c?.integrada === 'P1C' ? 'row-critico' : ''}>
+                  <td className="num">
+                    <strong>{attention.get(p.id)?.posicion ?? '—'}</strong>
+                  </td>
                   <td>
                     <strong>{p.nombre}</strong>
                     <span className="small muted block">
                       {area?.nombre} {p.bloqueado && '· bloqueado'}
                     </span>
+                    {p.acuerdo?.bloqueado && <LockBadge />}
                   </td>
                   <td>
-                    <LevelPicker label={`Impacto de ${p.nombre}`} value={p.impacto} onChange={(v) => setLevel(p.id, 'impacto', v)} labels={IMPACT_LABELS} hints={IMPACT_HINTS} compact name={`i-${p.id}`} />
+                    <LevelPicker label={`Impacto de ${p.nombre}`} value={p.impacto} onChange={(v) => setLevel(p.id, 'impacto', v)} labels={IMPACT_LABELS} hints={IMPACT_HINTS} compact name={`i-${p.id}`} disabled={locked} />
                   </td>
                   <td>
-                    <LevelPicker label={`Urgencia de ${p.nombre}`} value={p.urgencia} onChange={(v) => setLevel(p.id, 'urgencia', v)} labels={URGENCY_LABELS} compact name={`u-${p.id}`} />
+                    <LevelPicker label={`Urgencia de ${p.nombre}`} value={p.urgencia} onChange={(v) => setLevel(p.id, 'urgencia', v)} labels={URGENCY_LABELS} compact name={`u-${p.id}`} disabled={locked} />
                   </td>
                   <td>
-                    <LevelPicker label={`Dependencia de ${p.nombre}`} value={p.dependencia} onChange={(v) => setLevel(p.id, 'dependencia', v)} labels={DEPENDENCY_LABELS} compact name={`d-${p.id}`} />
+                    <LevelPicker label={`Dependencia de ${p.nombre}`} value={p.dependencia} onChange={(v) => setLevel(p.id, 'dependencia', v)} labels={DEPENDENCY_LABELS} compact name={`d-${p.id}`} disabled={locked} />
                   </td>
                   <td className="num">
                     <strong className="score-num sm">{p.score}</strong>
                   </td>
+                  <td>{c && <AxisBadge eje="estrategica" p={c.estrategica} direccion={c.fuenteEstrategica === 'direccion'} />}</td>
+                  <td>{c && <AxisBadge eje="operativa" p={c.operativa} direccion={c.fuenteOperativa === 'direccion'} />}</td>
                   <td>
-                    <PriorityBadge p={p.prioridadCalculada} />
-                  </td>
-                  <td>
-                    <button className="btn btn-ghost btn-sm" onClick={() => modals.open({ type: 'override', projectId: p.id, sessionId: session.id, origen: 'junta' })} aria-label={`Ajustar prioridad de ${p.nombre}`}>
-                      <PriorityBadge p={p.prioridadFinal} override={p.ajusteDireccion} /> <Scale size={14} aria-hidden />
-                    </button>
+                    {director ? (
+                      <button className="btn btn-ghost btn-sm" onClick={() => modals.open({ type: 'override', projectId: p.id, sessionId: session.id, origen: 'junta' })} aria-label={`Ajustar prioridad de ${p.nombre}`}>
+                        {c ? <ClassBadge c={c.integrada} /> : <PriorityBadge p={p.prioridadFinal} />} <Scale size={14} aria-hidden />
+                      </button>
+                    ) : c ? (
+                      <ClassBadge c={c.integrada} />
+                    ) : (
+                      <PriorityBadge p={p.prioridadFinal} />
+                    )}
                   </td>
                   {kickoff && (
                     <td>

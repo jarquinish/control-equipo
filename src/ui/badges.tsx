@@ -15,7 +15,8 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { BLOCK_STATUS_LABELS, COMMITMENT_STATUS_LABELS, QUADRANT_LABELS } from '../domain/constants';
-import type { BlockStatus, CommitmentDisplayStatus, Priority, ProjectStatus, Quadrant } from '../domain/types';
+import { CLASIFICACION_LABELS } from '../domain/priority';
+import type { BlockStatus, Clasificacion, CommitmentDisplayStatus, Priority, PriorityAxis, ProjectStatus, Quadrant } from '../domain/types';
 import { useSettings } from '../state/app';
 
 export type Tone = 'green' | 'yellow' | 'red' | 'blue' | 'pink' | 'gray' | 'brand';
@@ -34,6 +35,43 @@ export function PriorityBadge({ p, override, size }: { p: Priority; override?: b
     <span className={`prio prio-${p.toLowerCase()} ${size === 'lg' ? 'prio-lg' : ''}`} title={override ? 'Prioridad ajustada por Dirección' : `Prioridad ${p}`}>
       {p}
       {override && <span className="prio-mark" aria-label="ajuste de Dirección">★</span>}
+    </span>
+  );
+}
+
+/** Clasificación integrada: P1 Crítico / P1 Urgente / P1 Estratégico / P2 / P3. */
+export function ClassBadge({ c, size }: { c: Clasificacion; size?: 'lg' }) {
+  const title = {
+    P1C: 'P1 estratégico y P1 operativo',
+    P1U: 'P1 operativo (urgente)',
+    P1E: 'P1 estratégico',
+    P2: 'Prioridad 2',
+    P3: 'Prioridad 3',
+  }[c];
+  return (
+    <span className={`cls cls-${c.toLowerCase()} ${size === 'lg' ? 'cls-lg' : ''}`} title={title} data-cls={c}>
+      {CLASIFICACION_LABELS[c]}
+    </span>
+  );
+}
+
+/** Prioridad de un eje: E (estratégica) u O (operativa). */
+export function AxisBadge({ eje, p, direccion }: { eje: PriorityAxis; p: Priority; direccion?: boolean }) {
+  const name = eje === 'estrategica' ? 'Estratégica' : 'Operativa';
+  return (
+    <span className={`axis axis-${p.toLowerCase()}`} title={`Prioridad ${name.toLowerCase()} ${p}${direccion ? ' · establecida por Dirección' : ''}`}>
+      <span className="axis-k">{eje === 'estrategica' ? 'E' : 'O'}</span>
+      {p}
+      {direccion && <span className="prio-mark" aria-label="establecida por Dirección">★</span>}
+    </span>
+  );
+}
+
+/** Acuerdo de prioridad cerrado por Dirección. */
+export function LockBadge() {
+  return (
+    <span className="chip chip-gray lock-badge" title="Acuerdo de prioridad cerrado: sólo Dirección puede cambiar la ponderación">
+      <Lock size={12} aria-hidden /> Acuerdo cerrado
     </span>
   );
 }

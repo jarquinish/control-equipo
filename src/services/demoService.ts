@@ -97,7 +97,7 @@ export function buildDemoData(now: Date = new Date()): DbData {
   };
 
   // Ajuste de Dirección: Momento de Vida sube a P2 (alimenta la campaña principal).
-  svc.projects.setOverride(pr.momentoVida, 'P2', 'Alimenta la campaña «¿Qué es SOC?»');
+  svc.priority.setDirective(pr.momentoVida, 'estrategica', 'P1', 'Alimenta la campaña «¿Qué es SOC?»');
 
   for (const [i, areaId] of [A.contenido, A.diseno, A.mkt, A.store].entries()) {
     set(at(-2, 0, `08:${String(30 + i * 5)}`));
@@ -149,7 +149,7 @@ export function buildDemoData(now: Date = new Date()): DbData {
   svc.blocks.resolve(b2.id, 'junta');
   svc.commitments.reschedule(c3.id, { fecha: date(at(-1, 2, '13:00')), hora: '13:00', motivo: 'El proveedor pidió muestras antes de confirmar' }, { sessionId: s.id });
   // Paso 4: ajuste de Dirección (regla 8)
-  svc.projects.setOverride(pr.kitMarca, 'P2', 'Arranca en noviembre, después de la Convención', { origen: 'junta' });
+  svc.priority.setDirective(pr.kitMarca, 'operativa', 'P2', 'Arranca en noviembre, después de la Convención', 'junta');
   svc.sessions.addDecision(s.id, { projectId: pr.kitMarca, descripcion: 'Kit de alineación de marca baja a P2: arranca en noviembre, después de la Convención.', responsable: director.id });
   // Paso 5-6: nuevos bloqueos y compromisos
   const b4 = svc.blocks.create({ projectId: pr.convencion, descripcion: 'Comercial no ha confirmado presupuesto de pauta ni lista de invitados', necesidad: 'Presupuesto aprobado y base de invitados', dependeDe: 'Dirección Comercial', areaDependencia: 'ext:Comercial', quienPuedeAyudar: 'Miguel Jarquín', responsableGestion: P.carlos }, 'junta');

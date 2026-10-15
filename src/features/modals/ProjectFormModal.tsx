@@ -1,11 +1,14 @@
 import { useState, type FormEvent } from 'react';
 import { DEPENDENCY_LABELS, IMPACT_HINTS, IMPACT_LABELS, PROJECT_STATUSES, QUADRANT_LABELS, QUADRANTS, URGENCY_LABELS } from '../../domain/constants';
+import { toISODate } from '../../domain/dates';
+import { can } from '../../domain/permissions';
+import { classifyContext, classifyProject } from '../../domain/priority';
 import { computePriority, suggestQuadrant } from '../../domain/scoring';
-import type { Level, ProjectStatus, Quadrant, UpdateOrigin } from '../../domain/types';
+import type { Level, Project, ProjectStatus, Quadrant, UpdateOrigin } from '../../domain/types';
 import { ValidationError, type FieldErrors } from '../../domain/validation';
-import { useDb, useServices, useSettings } from '../../state/app';
+import { useApp, useCurrentUser, useDb, useServices, useSettings } from '../../state/app';
 import { navigate } from '../../state/router';
-import { PriorityBadge } from '../../ui/badges';
+import { AxisBadge, ClassBadge, LockBadge } from '../../ui/badges';
 import { friendlyError, useFeedback } from '../../ui/feedback';
 import { AreaSelect, DependencySelect, LevelPicker, PersonSelect, SelectInput, TextArea, TextInput } from '../../ui/forms';
 import { Modal } from '../../ui/Modal';
@@ -22,7 +25,10 @@ export function ProjectFormModal({ projectId, areaId, origen, onClose }: Props) 
   const services = useServices();
   const settings = useSettings();
   const { toast, confirm } = useFeedback();
+  const { now } = useApp();
+  const user = useCurrentUser();
   const existing = db.projects.find((p) => p.id === projectId);
+  const locked = !!existing?.acuerdo?.bloqueado && !can(user, 'project.override');
 
   const [f, setF] = useState({
     nombre: existing?.nombre ?? '',
@@ -36,6 +42,8 @@ export function ProjectFormModal({ projectId, areaId, origen, onClose }: Props) 
     eisenhower: (existing?.eisenhower ?? '') as Quadrant | '',
     estado: (existing?.estado ?? 'en_curso') as ProjectStatus,
     dependeDe: existing?.dependeDe ?? '',
+    solicitante: existing?.solicitante ?? '',
+    frente: existing?.frente ?? '',
     comentario: '',
     bloqueado: false,
     bDesc: '',
@@ -45,8 +53,12 @@ export function ProjectFormModal({ projectId, areaId, origen, onClose }: Props) 
   const [errors, setErrors] = useState<FieldErrors>({});
   const set = <K extends keyof typeof f>(k: K, v: (typeof f)[K]) => setF((x) => ({ ...x, [k]: v }));
 
-  const scoring = computePriority({ impacto: f.impacto, urgencia: f.urgencia, dependencia: f.dependencia, override: existing?.ajusteDireccion ? existing.prioridadFinal : undefined });
+  const scoring = computePriority({ impacto: f.impacto, urgencia: f.urgencia, dependencia: f.dependencia });
   const suggested = suggestQuadrant(f.impacto, f.urgencia);
+  // Vista previa de la clasificación con los datos del formulario (Dirección prevalece).
+  const draft = { ...(existing ?? { id: '', createdAt: now.toISOString(), bloqueado: false }), nombre: f.nombre, areaId: f.areaId, impacto: f.impacto, urgencia: f.urgencia, dependencia: f.dependencia, fechaObjetivo: f.fechaObjetivo || undefined, solicitante: f.solicitante || undefined, frente: f.frente || undefined } as Project;
+  const preview = f.areaId ? classifyProject(draft, classifyContext(db, draft, toISODate(now), settings.priorityMatrix!, settings.criteria.umbralOperativoP1, settings.criteria.umbralOperativoP2)) : undefined;
+  const solicitantes = [...(settings.priorityMatrix?.iniciativas ?? []).filter((i) => i.tipo === 'solicitante').map((i) => i.nombre), 'Dirección de Posicionamiento', ...db.areas.map((a) => a.nombre)];
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
@@ -66,6 +78,8 @@ export function ProjectFormModal({ projectId, areaId, origen, onClose }: Props) 
         eisenhower: (f.eisenhower || suggested) as Quadrant,
         estado: f.estado,
         dependeDe: f.dependeDe || undefined,
+        solicitante: f.solicitante,
+        frente: f.frente,
       };
       const opts = { origen: origen ?? 'area', comentario: f.comentario };
       const p = services.ctx.store.batch(() => {
@@ -144,18 +158,41 @@ export function ProjectFormModal({ projectId, areaId, origen, onClose }: Props) 
           ))}
         </SelectInput>
 
+        <TextInput label="Solicitante" value={f.solicitante} onValue={(v) => set('solicitante', v)} list="solicitantes-list" placeholder="Quién pide el trabajo (Brokers, Dirección Comercial…)" disabled={locked} />
+        <datalist id="solicitantes-list">
+          {[...new Set(solicitantes)].map((n) => (
+            <option key={n} value={n} />
+          ))}
+        </datalist>
+        <TextInput label="Frente / proyecto padre" value={f.frente} onValue={(v) => set('frente', v)} placeholder="Ej. Convención SOC 2026" disabled={locked} />
+
         <div className="span-2 scoring-box">
+          {locked && (
+            <p className="small muted">
+              <LockBadge /> Acuerdo de prioridad cerrado: sólo Dirección cambia impacto, urgencia, dependencia, solicitante y frente.
+            </p>
+          )}
           <div className="scoring-pickers">
-            <LevelPicker label="Impacto" value={f.impacto} onChange={(v) => set('impacto', v)} labels={IMPACT_LABELS} hints={IMPACT_HINTS} />
-            <LevelPicker label="Urgencia" value={f.urgencia} onChange={(v) => set('urgencia', v)} labels={URGENCY_LABELS} />
-            <LevelPicker label="Dependencia" value={f.dependencia} onChange={(v) => set('dependencia', v)} labels={DEPENDENCY_LABELS} />
+            <LevelPicker label="Impacto" value={f.impacto} onChange={(v) => set('impacto', v)} labels={IMPACT_LABELS} hints={IMPACT_HINTS} disabled={locked} />
+            <LevelPicker label="Urgencia" value={f.urgencia} onChange={(v) => set('urgencia', v)} labels={URGENCY_LABELS} disabled={locked} />
+            <LevelPicker label="Dependencia" value={f.dependencia} onChange={(v) => set('dependencia', v)} labels={DEPENDENCY_LABELS} disabled={locked} />
           </div>
           <div className="scoring-result" aria-live="polite">
             <span className="muted">Score</span>
             <strong className="score-num" data-testid="score-preview">{scoring.score}</strong>
-            <PriorityBadge p={scoring.prioridadFinal} override={scoring.ajusteDireccion} size="lg" />
-            {scoring.ajusteDireccion && <span className="small muted">Calculada: {scoring.prioridadCalculada}</span>}
+            {preview && (
+              <span className="row gap wrap" data-testid="clasif-preview">
+                <ClassBadge c={preview.integrada} size="lg" />
+                <AxisBadge eje="estrategica" p={preview.estrategica} direccion={preview.fuenteEstrategica === 'direccion'} />
+                <AxisBadge eje="operativa" p={preview.operativa} direccion={preview.fuenteOperativa === 'direccion'} />
+              </span>
+            )}
           </div>
+          {preview && (
+            <p className="small muted span-2">
+              {preview.motivoEstrategica} {preview.motivoOperativa}
+            </p>
+          )}
         </div>
 
         <SelectInput

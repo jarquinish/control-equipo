@@ -1,6 +1,9 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { DataStore } from '../data/store';
-import { getActiveWeek, getSettings, getWeekData, liveSelection, type WeekData } from '../domain/selectors';
+import { toISODate } from '../domain/dates';
+import { can } from '../domain/permissions';
+import { attentionOrder, type Attention } from '../domain/priority';
+import { getActiveWeek, getSettings, getWeekData, isActiveProject, liveSelection, type WeekData } from '../domain/selectors';
 import type { DbData, Person, Settings } from '../domain/types';
 import { bootstrapEmpty, createServices, type Services } from '../services';
 import { buildDemoData } from '../services/demoService';
@@ -29,6 +32,20 @@ const AppContext = createContext<AppContextValue | null>(null);
 
 class NotInitializedError extends Error {}
 
+/** Quien puede editar proyectos mantiene al día la clasificación calculada (fechas, compromisos, matriz). */
+function syncPriorities(services: Services): void {
+  const { ctx } = services;
+  const id = ctx.userId();
+  const user = id ? ctx.repos.people.read(id) : undefined;
+  if (!can(user, 'project.edit')) return;
+  try {
+    services.priority.migrateLegacy();
+    if ((ctx.settings().priorityModel ?? 1) >= 2) services.priority.syncAll();
+  } catch (err) {
+    console.warn('[Alignment & Unblock] No se pudo recalcular la clasificación de prioridades', err);
+  }
+}
+
 async function openStore(ws: Workspace, auth: AuthInfo | null): Promise<{ store: DataStore; services: Services }> {
   const remote = ws === 'principal' ? auth : null;
   let store = new DataStore(createAdapter(ws, remote));
@@ -56,6 +73,7 @@ async function openStore(ws: Workspace, auth: AuthInfo | null): Promise<{ store:
   if (remote) {
     store.identity = ensureIdentity(services, { email: remote.email, name: remote.name, rol: remote.member.rol, personId: remote.member.person_id }, !hadData);
   }
+  syncPriorities(services);
   await store.flush();
   return { store, services };
 }
@@ -126,6 +144,23 @@ export function AppProvider({ children, fallback }: { children: ReactNode; fallb
     document.addEventListener('visibilitychange', onVisibility);
     return () => document.removeEventListener('visibilitychange', onVisibility);
   }, [state]);
+
+  // Clasificación de prioridades al día: tras cambios (propios o de otros) y al cambiar el día.
+  const today = toISODate(now);
+  useEffect(() => {
+    if (!state) return;
+    let t: number | undefined;
+    const schedule = () => {
+      window.clearTimeout(t);
+      t = window.setTimeout(() => syncPriorities(state.services), 1500);
+    };
+    schedule();
+    const off = state.store.subscribe(schedule);
+    return () => {
+      off();
+      window.clearTimeout(t);
+    };
+  }, [state, today]);
 
   // Reloj de la aplicación: actualiza vencimientos automáticamente.
   useEffect(() => {
@@ -231,6 +266,15 @@ export function useWeekData(): WeekData | undefined {
   const db = useDb();
   const { viewWeekId, now } = useApp();
   return useMemo(() => getWeekData(db, viewWeekId, now), [db, viewWeekId, now]);
+}
+
+/** Orden de atención de los proyectos activos (nivel 1 = P1 Crítico … 5 = P3). */
+export function useAttention(): Map<string, Attention> {
+  const db = useDb();
+  const { now } = useApp();
+  const settings = useSettings();
+  const today = toISODate(now);
+  return useMemo(() => attentionOrder(db, db.projects.filter(isActiveProject), today, settings.criteria.diasDesatendido), [db, today, settings.criteria.diasDesatendido]);
 }
 
 export function useActiveWeek() {

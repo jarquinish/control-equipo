@@ -1,4 +1,5 @@
-import { fmtDeadline } from './dates';
+import { fmtDeadline, toISODate } from './dates';
+import { isDesatendido, NIVEL_POR_CLASIFICACION } from './priority';
 import {
   areaUpdateFor,
   blockIsManaged,
@@ -24,7 +25,9 @@ export type AlertKind =
   | 'escalado'
   | 'bloqueo_sin_compromiso'
   | 'p1_sin_responsable'
-  | 'area_sin_actualizar';
+  | 'area_sin_actualizar'
+  | 'p1e_desatendido'
+  | 'p1_limite_area';
 
 export type Severity = 'critical' | 'warning' | 'info';
 
@@ -53,6 +56,8 @@ export const ALERT_LABELS: Record<AlertKind, string> = {
   bloqueo_sin_compromiso: 'Bloqueo sin compromiso',
   p1_sin_responsable: 'P1 sin responsable',
   area_sin_actualizar: 'Área sin actualizar',
+  p1e_desatendido: 'P1 Estratégico desatendido',
+  p1_limite_area: 'Gerencia con demasiados P1',
 };
 
 /**
@@ -132,7 +137,19 @@ export function computeAlerts(db: DbData, data: WeekData, now: Date): Alert[] {
     }
   }
 
+  const today = toISODate(now);
   for (const p of data.projects.filter(isActiveProject)) {
+    if (data.live && isDesatendido(db, p, today, criteria.diasDesatendido)) {
+      alerts.push({
+        id: `p1e-${p.id}`,
+        kind: 'p1e_desatendido',
+        rank: 3,
+        severity: 'warning',
+        title: p.nombre,
+        detail: `P1 Estratégico sin avance ni compromiso en ${criteria.diasDesatendido} días: sube al nivel 2 de atención`,
+        projectId: p.id,
+      });
+    }
     if (p.prioridadFinal !== 'P1') continue;
     if (p.bloqueado) {
       alerts.push({
@@ -196,6 +213,27 @@ export function computeAlerts(db: DbData, data: WeekData, now: Date): Alert[] {
     }
   }
 
+  for (const a of db.areas.filter((x) => x.activo)) {
+    const activos = data.projects.filter((p) => p.areaId === a.id && isActiveProject(p));
+    const urgentes = activos.filter((p) => p.clasif?.integrada === 'P1C' || p.clasif?.integrada === 'P1U').length;
+    const estrategicos = activos.filter((p) => p.clasif?.integrada === 'P1E').length;
+    const exceso = [
+      urgentes > criteria.maxP1UrgentesPorArea ? `${urgentes} P1 Críticos/Urgentes (máx. ${criteria.maxP1UrgentesPorArea})` : '',
+      estrategicos > criteria.maxP1EstrategicosPorArea ? `${estrategicos} P1 Estratégicos (máx. ${criteria.maxP1EstrategicosPorArea})` : '',
+    ].filter(Boolean);
+    if (exceso.length) {
+      alerts.push({
+        id: `lim-${a.id}`,
+        kind: 'p1_limite_area',
+        rank: 8,
+        severity: 'warning',
+        title: a.nombre,
+        detail: `${a.nombre} tiene ${exceso.join(' y ')}: Dirección decide qué prioridad se desplaza`,
+        areaId: a.id,
+      });
+    }
+  }
+
   if (data.live) {
     for (const a of db.areas.filter((x) => x.activo)) {
       if (!areaUpdateFor(data, a.id)) {
@@ -233,5 +271,6 @@ export function attentionItems(data: WeekData, alerts: Alert[]): AttentionItem[]
     item.rank = Math.min(item.rank, a.rank);
     map.set(a.projectId, item);
   }
-  return [...map.values()].sort((a, b) => a.rank - b.rank || b.alerts.length - a.alerts.length);
+  const nivel = (p: Project) => (p.clasif ? NIVEL_POR_CLASIFICACION[p.clasif.integrada] : 9);
+  return [...map.values()].sort((a, b) => a.rank - b.rank || nivel(a.project) - nivel(b.project) || b.alerts.length - a.alerts.length);
 }

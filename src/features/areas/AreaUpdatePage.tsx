@@ -5,9 +5,10 @@ import { fmtDateTime } from '../../domain/dates';
 import { computePriority } from '../../domain/scoring';
 import { areaUpdateFor, isActiveProject, personName, projectUpdatedThisWeek, sortProjectsByPriority } from '../../domain/selectors';
 import type { Level, Project, ProjectStatus } from '../../domain/types';
-import { useActiveWeek, useDb, useServices, useSettings, useWeekData } from '../../state/app';
+import { can } from '../../domain/permissions';
+import { useActiveWeek, useCurrentUser, useDb, useServices, useSettings, useWeekData } from '../../state/app';
 import { Link, navigate, useQuery } from '../../state/router';
-import { BlockedChip, Chip, PriorityBadge } from '../../ui/badges';
+import { AxisBadge, BlockedChip, Chip, ClassBadge, LockBadge, PriorityBadge } from '../../ui/badges';
 import { EmptyState, PageHeader } from '../../ui/common';
 import { useFeedback } from '../../ui/feedback';
 import { LevelPicker, PersonSelect } from '../../ui/forms';
@@ -175,6 +176,8 @@ function UpdateRow({ p, updated, readOnly }: { p: Project; updated: boolean; rea
   const settings = useSettings();
   const modals = useModals();
   const { run, confirm } = useFeedback();
+  const user = useCurrentUser();
+  const locked = !!p.acuerdo?.bloqueado && !can(user, 'project.override');
   const [open, setOpen] = useState(false);
   const [d, setD] = useState({ estado: p.estado, responsable: p.responsable ?? '', fechaObjetivo: p.fechaObjetivo ?? '', impacto: p.impacto, urgencia: p.urgencia, dependencia: p.dependencia, comentario: '' });
   const dirty =
@@ -185,14 +188,14 @@ function UpdateRow({ p, updated, readOnly }: { p: Project; updated: boolean; rea
     d.urgencia !== p.urgencia ||
     d.dependencia !== p.dependencia ||
     !!d.comentario.trim();
-  const preview = computePriority({ impacto: d.impacto, urgencia: d.urgencia, dependencia: d.dependencia, override: p.ajusteDireccion ? p.prioridadFinal : undefined });
+  const preview = computePriority({ impacto: d.impacto, urgencia: d.urgencia, dependencia: d.dependencia });
 
   const save = () => {
     const r = run(
       () =>
         services.projects.update(
           p.id,
-          { estado: d.estado, responsable: d.responsable || undefined, fechaObjetivo: d.fechaObjetivo || undefined, impacto: d.impacto, urgencia: d.urgencia, dependencia: d.dependencia },
+          { estado: d.estado, responsable: d.responsable || undefined, fechaObjetivo: d.fechaObjetivo || undefined, ...(locked ? {} : { impacto: d.impacto, urgencia: d.urgencia, dependencia: d.dependencia }) },
           { origen: 'area', comentario: d.comentario },
         ),
       'Proyecto actualizado',
@@ -212,11 +215,17 @@ function UpdateRow({ p, updated, readOnly }: { p: Project; updated: boolean; rea
   return (
     <li className={`update-row card ${updated ? 'is-updated' : ''}`} data-testid="update-row">
       <div className="update-head">
-        <PriorityBadge p={preview.prioridadFinal} override={preview.ajusteDireccion} />
+        {p.clasif ? <ClassBadge c={p.clasif.integrada} /> : <PriorityBadge p={p.prioridadFinal} />}
         <div className="update-title">
           <strong>{p.nombre}</strong>
           <span className="small muted">
-            Score {preview.score} · {personName(db.people, p.responsable)} {p.bloqueado && <BlockedChip />}
+            {p.clasif && (
+              <>
+                <AxisBadge eje="estrategica" p={p.clasif.estrategica} direccion={p.clasif.fuenteEstrategica === 'direccion'} />{' '}
+                <AxisBadge eje="operativa" p={p.clasif.operativa} direccion={p.clasif.fuenteOperativa === 'direccion'} /> ·{' '}
+              </>
+            )}
+            Score {preview.score} · {personName(db.people, p.responsable)} {p.bloqueado && <BlockedChip />} {p.acuerdo?.bloqueado && <LockBadge />}
           </span>
         </div>
         {updated ? (
@@ -258,9 +267,10 @@ function UpdateRow({ p, updated, readOnly }: { p: Project; updated: boolean; rea
               <span className="field-label">Fecha objetivo</span>
               <input className="input" type="date" value={d.fechaObjetivo} onChange={(e) => setD({ ...d, fechaObjetivo: e.target.value })} />
             </label>
-            <LevelPicker label="Impacto" value={d.impacto} onChange={(v: Level) => setD({ ...d, impacto: v })} labels={IMPACT_LABELS} hints={IMPACT_HINTS} compact />
-            <LevelPicker label="Urgencia" value={d.urgencia} onChange={(v: Level) => setD({ ...d, urgencia: v })} labels={URGENCY_LABELS} compact />
-            <LevelPicker label="Dependencia" value={d.dependencia} onChange={(v: Level) => setD({ ...d, dependencia: v })} labels={DEPENDENCY_LABELS} compact />
+            <LevelPicker label="Impacto" value={d.impacto} onChange={(v: Level) => setD({ ...d, impacto: v })} labels={IMPACT_LABELS} hints={IMPACT_HINTS} compact disabled={locked} />
+            <LevelPicker label="Urgencia" value={d.urgencia} onChange={(v: Level) => setD({ ...d, urgencia: v })} labels={URGENCY_LABELS} compact disabled={locked} />
+            <LevelPicker label="Dependencia" value={d.dependencia} onChange={(v: Level) => setD({ ...d, dependencia: v })} labels={DEPENDENCY_LABELS} compact disabled={locked} />
+            {locked && <p className="small muted span-3">Acuerdo de prioridad cerrado: la ponderación sólo la cambia Dirección.</p>}
             <label className="span-3">
               <span className="field-label">Comentario</span>
               <input className="input" value={d.comentario} onChange={(e) => setD({ ...d, comentario: e.target.value })} placeholder="Avance, riesgo o contexto" />

@@ -1,8 +1,9 @@
 import { newId } from '../data/ids';
-import { computePriority, suggestQuadrant } from '../domain/scoring';
+import { calcScore, suggestQuadrant } from '../domain/scoring';
 import { isBlockOpen, updateFromProject } from '../domain/selectors';
-import type { Level, Priority, Project, ProjectStatus, Quadrant, UpdateOrigin, WeeklyUpdate } from '../domain/types';
+import type { Level, Project, ProjectStatus, Quadrant, UpdateOrigin, WeeklyUpdate } from '../domain/types';
 import { assertValid, validateProject, ValidationError } from '../domain/validation';
+import { classificationFor, isDirector, LOCKED_FIELDS } from './classification';
 import type { ServiceContext } from './context';
 
 export interface ProjectInput {
@@ -18,6 +19,8 @@ export interface ProjectInput {
   estado?: ProjectStatus;
   dependeDe?: string;
   ref?: string;
+  solicitante?: string;
+  frente?: string;
 }
 
 export interface UpdateOptions {
@@ -65,8 +68,7 @@ export function projectService(ctx: ServiceContext) {
     assertValid(validateProject(input));
     if (!ctx.repos.areas.read(input.areaId)) throw new ValidationError({ areaId: 'El área seleccionada no existe.' });
     const at = ctx.nowIso();
-    const scoring = computePriority(input);
-    const project: Project = {
+    const base: Project = {
       id: newId('prj'),
       nombre: input.nombre.trim(),
       descripcion: input.descripcion?.trim() ?? '',
@@ -75,55 +77,58 @@ export function projectService(ctx: ServiceContext) {
       impacto: input.impacto,
       urgencia: input.urgencia,
       dependencia: input.dependencia,
-      ...scoring,
+      score: calcScore(input.impacto, input.urgencia, input.dependencia),
+      prioridadCalculada: 'P3',
+      prioridadFinal: 'P3',
+      ajusteDireccion: false,
       eisenhower: input.eisenhower ?? suggestQuadrant(input.impacto, input.urgencia),
       estado: input.estado ?? 'en_curso',
       bloqueado: false,
       fechaObjetivo: input.fechaObjetivo || undefined,
       dependeDe: input.dependeDe || undefined,
       ref: input.ref?.trim() || undefined,
+      solicitante: input.solicitante?.trim() || undefined,
+      frente: input.frente?.trim() || undefined,
       createdWeekId: ctx.activeWeek()?.id,
       createdAt: at,
       updatedAt: at,
       updatedBy: ctx.userId(),
     };
+    const project: Project = { ...base, ...classificationFor(ctx, base) };
     projects.create(project);
     recordWeeklyUpdate(ctx, project, opts);
     return project;
   };
 
-  /** Actualiza un proyecto y recalcula score/prioridad conservando el ajuste de Dirección. */
+  /** Actualiza un proyecto y recalcula su clasificación (lo establecido por Dirección se conserva). */
   const update = (id: string, patch: Partial<ProjectInput>, opts: UpdateOptions = {}): Project => {
     const current = get(id);
     assertValid(validateProject(patch, true));
-    const merged = { ...current, ...patch };
-    const scoring = computePriority({
-      impacto: merged.impacto,
-      urgencia: merged.urgencia,
-      dependencia: merged.dependencia,
-      override: current.ajusteDireccion ? current.prioridadFinal : undefined,
-    });
-    const next = projects.update(id, {
+    if (current.acuerdo?.bloqueado && !isDirector(ctx)) {
+      const val = (v: unknown) => (typeof v === 'string' ? v.trim() || undefined : v);
+      const touched = LOCKED_FIELDS.filter((f) => f in patch && val(patch[f]) !== val(current[f]));
+      if (touched.length)
+        throw new ValidationError({ acuerdo: 'El acuerdo de prioridad de este proyecto está cerrado: sólo Dirección puede cambiar su ponderación.' });
+    }
+    const merged: Project = {
+      ...current,
       ...patch,
       nombre: patch.nombre?.trim() ?? current.nombre,
       responsable: 'responsable' in patch ? patch.responsable || undefined : current.responsable,
       fechaObjetivo: 'fechaObjetivo' in patch ? patch.fechaObjetivo || undefined : current.fechaObjetivo,
-      ...scoring,
-      motivoAjuste: scoring.ajusteDireccion ? current.motivoAjuste : undefined,
-      updatedAt: ctx.nowIso(),
-      updatedBy: ctx.userId(),
-    });
-    recordWeeklyUpdate(ctx, next, opts);
-    return next;
-  };
-
-  /** Override de Dirección. `null` devuelve el proyecto a la prioridad calculada. */
-  const setOverride = (id: string, prioridad: Priority | null, motivo?: string, opts: UpdateOptions = {}): Project => {
-    const current = get(id);
-    const scoring = computePriority({ ...current, override: prioridad ?? undefined });
+      solicitante: 'solicitante' in patch ? patch.solicitante?.trim() || undefined : current.solicitante,
+      frente: 'frente' in patch ? patch.frente?.trim() || undefined : current.frente,
+    };
+    merged.score = calcScore(merged.impacto, merged.urgencia, merged.dependencia);
     const next = projects.update(id, {
-      ...scoring,
-      motivoAjuste: scoring.ajusteDireccion ? motivo?.trim() || current.motivoAjuste : undefined,
+      ...patch,
+      nombre: merged.nombre,
+      responsable: merged.responsable,
+      fechaObjetivo: merged.fechaObjetivo,
+      solicitante: merged.solicitante,
+      frente: merged.frente,
+      score: merged.score,
+      ...classificationFor(ctx, merged),
       updatedAt: ctx.nowIso(),
       updatedBy: ctx.userId(),
     });
@@ -159,7 +164,6 @@ export function projectService(ctx: ServiceContext) {
     get,
     create,
     update,
-    setOverride,
     setStatus,
     setQuadrant: (id: string, eisenhower: Quadrant, opts: UpdateOptions = {}) => {
       get(id);

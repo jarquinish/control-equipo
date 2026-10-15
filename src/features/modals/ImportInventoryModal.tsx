@@ -15,11 +15,10 @@ import {
   type RowChoice,
 } from '../../domain/inventory';
 import { can } from '../../domain/permissions';
-import { computePriority } from '../../domain/scoring';
-import type { Level, UpdateOrigin } from '../../domain/types';
+import type { Level, ProjectClasif, UpdateOrigin } from '../../domain/types';
 import { buildInventoryTemplate } from '../../services/importService';
 import { useCurrentUser, useDb, useServices, useSettings } from '../../state/app';
-import { PriorityBadge } from '../../ui/badges';
+import { AxisBadge, ClassBadge } from '../../ui/badges';
 import { downloadFile } from '../../ui/common';
 import { friendlyError, useFeedback } from '../../ui/feedback';
 import { Modal } from '../../ui/Modal';
@@ -43,7 +42,8 @@ export function ImportInventoryModal({ areaId, origen = 'area', onClose }: { are
   const [choices, setChoices] = useState<Record<string, RowChoice>>({});
   const [filter, setFilter] = useState<Filter>('todas');
   const today = toISODate(services.ctx.now());
-  const [opts, setOpts] = useState<ImportOptions>({ includePending: false, defaultHora: '18:00', sheetAreas: {}, today });
+  const esDireccion = can(user, 'project.override');
+  const [opts, setOpts] = useState<ImportOptions>({ includePending: false, defaultHora: '18:00', sheetAreas: {}, today, esDireccion, updateExisting: false });
   const area = db.areas.find((a) => a.id === areaId);
   const allowed = can(user, 'project.edit');
 
@@ -72,6 +72,20 @@ export function ImportInventoryModal({ areaId, origen = 'area', onClose }: { are
   };
 
   const plan = useMemo(() => (inv ? buildPlan(inv, choices, opts, db) : null), [inv, choices, opts, db]);
+  /** Clasificación prevista por fila (proyecto nuevo) o la vigente (proyecto existente). */
+  const rowClasif = useMemo(() => {
+    const m = new Map<string, ProjectClasif>();
+    if (!plan) return m;
+    for (const p of plan.projects) for (const k of p.rows) if (p.clasif) m.set(k, p.clasif);
+    if (inv)
+      for (const sh of inv.sheets)
+        for (const r of sh.rows) {
+          if (m.has(r.key) || !r.existingId) continue;
+          const c = db.projects.find((x) => x.id === r.existingId)?.clasif;
+          if (c) m.set(r.key, c);
+        }
+    return m;
+  }, [plan, inv, db.projects]);
   const pending = inv ? inv.sheets.flatMap((s) => s.rows).filter((r) => r.validacion === 'pendiente' && opts.sheetAreas[r.sheet]).length : 0;
 
   const setChoice = (key: string, patch: Partial<RowChoice>) => setChoices((c) => ({ ...c, [key]: { ...c[key], ...patch } }));
@@ -89,7 +103,7 @@ export function ImportInventoryModal({ areaId, origen = 'area', onClose }: { are
     if (!plan) return;
     try {
       const r = services.imports.apply(plan, origen);
-      toast(`Importado: ${r.proyectos} proyectos, ${r.compromisos} compromisos y ${r.bloqueos} bloqueos${r.personas ? ` · ${r.personas} personas nuevas` : ''}`);
+      toast(`Importado: ${r.proyectos} proyectos, ${r.compromisos} compromisos y ${r.bloqueos} bloqueos${r.actualizados ? ` · ${r.actualizados} actualizados` : ''}${r.personas ? ` · ${r.personas} personas nuevas` : ''}`);
       onClose();
     } catch (err) {
       toast(friendlyError(err), 'error');
@@ -131,8 +145,8 @@ export function ImportInventoryModal({ areaId, origen = 'area', onClose }: { are
             Cancelar
           </button>
           {plan && (
-            <button type="button" className="btn btn-primary" onClick={doImport} disabled={!plan.projects.length} data-testid="import-confirm">
-              Importar {toCreate} proyectos · {s!.compromisos} compromisos
+            <button type="button" className="btn btn-primary" onClick={doImport} disabled={!plan.projects.length && !plan.updates.length} data-testid="import-confirm">
+              Importar {toCreate} proyectos · {s!.compromisos} compromisos{s!.actualizados ? ` · ${s!.actualizados} actualizados` : ''}
             </button>
           )}
         </>
@@ -195,6 +209,12 @@ export function ImportInventoryModal({ areaId, origen = 'area', onClose }: { are
                     Incluir filas <strong>pendientes de validación</strong> ({pending})
                   </span>
                 </label>
+                <label className="import-opt check">
+                  <input type="checkbox" checked={!!opts.updateExisting} onChange={(e) => setOpts({ ...opts, updateExisting: e.target.checked })} data-testid="import-update" />
+                  <span>
+                    <strong>Actualizar prioridades</strong> de proyectos que ya existen (no se duplican; sólo impacto, urgencia, dependencia, solicitante y frente)
+                  </span>
+                </label>
                 <label className="import-opt">
                   <span className="field-label">Hora para compromisos sin hora</span>
                   <input type="time" className="input" value={opts.defaultHora} onChange={(e) => setOpts({ ...opts, defaultHora: e.target.value })} aria-label="Hora para compromisos sin hora" />
@@ -205,6 +225,7 @@ export function ImportInventoryModal({ areaId, origen = 'area', onClose }: { are
               <div className="import-kpis" data-testid="import-stats">
                 {[
                   ['Proyectos nuevos', s.proyectos],
+                  ['Actualizados', s.actualizados],
                   ['Frentes (agrupan actividades)', s.frentes],
                   ['Actividades agrupadas', s.actividades],
                   ['Compromisos', s.compromisos],
@@ -229,11 +250,21 @@ export function ImportInventoryModal({ areaId, origen = 'area', onClose }: { are
                   </p>
                 ) : null;
               })}
-              {s.p1 > settings.criteria.maxP1 && (
-                <p className="alert alert-yellow">
-                  <AlertTriangle size={18} aria-hidden /> Quedarían {s.p1} P1 (recomendado ≤ {settings.criteria.maxP1}). No todo puede ser P1: ajústalo en el Paso 4 · Priorizar.
-                </p>
-              )}
+              {db.areas.map((a) => {
+                const st = s.porArea[a.id];
+                if (!st?.nuevos) return null;
+                const { maxP1UrgentesPorArea: mu, maxP1EstrategicosPorArea: me } = settings.criteria;
+                const msgs = [
+                  st.urgentes > mu ? `${st.urgentes} P1 Críticos/Urgentes (máximo ${mu})` : '',
+                  st.estrategicos > me ? `${st.estrategicos} P1 Estratégicos (máximo ${me})` : '',
+                ].filter(Boolean);
+                return msgs.length ? (
+                  <p key={`p1-${a.id}`} className="alert alert-yellow" data-testid="import-p1-limit">
+                    <AlertTriangle size={18} aria-hidden /> {a.nombre} quedaría con {msgs.join(' y ')}. No todo puede ser P1: Dirección lo valida en el Paso 4 · Priorizar.
+                  </p>
+                ) : null;
+              })}
+              {!esDireccion && <p className="small muted">Las columnas de prioridad de Dirección, iniciativa y validación directiva sólo las aplica Dirección; tú cargas la ponderación de la gerencia.</p>}
               {s.personas > 0 && (
                 <p className="small muted">
                   Personas que se darán de alta: {plan.newPeople.map((p) => p.nombre).join(', ')}.
@@ -281,7 +312,7 @@ export function ImportInventoryModal({ areaId, origen = 'area', onClose }: { are
                           {rows.map((row) => {
                             const c = choices[row.key];
                             const inc = plan.included[row.key];
-                            const pr = computePriority({ impacto: c.impacto, urgencia: row.urgencia, dependencia: row.dependencia });
+                            const cl = rowClasif.get(row.key);
                             const list = plan.issues[row.key] ?? [];
                             const dis = !shArea || !isIncluded(row, opts);
                             return (
@@ -294,12 +325,13 @@ export function ImportInventoryModal({ areaId, origen = 'area', onClose }: { are
                                     {settings.statusLabels[row.estado]}
                                     {row.bloqueado && ' · bloqueado'}
                                   </span>
-                                  <span className="row gap import-prio">
-                                    <PriorityBadge p={row.prioridadValidada ?? pr.prioridadCalculada} override={!!row.prioridadValidada && row.prioridadValidada !== pr.prioridadCalculada} />
-                                    <span className="small muted">
-                                      {c.impacto}+{row.urgencia}+{row.dependencia} = {pr.score}
+                                  {cl && (
+                                    <span className="row gap import-prio" data-testid="import-clasif">
+                                      <ClassBadge c={cl.integrada} />
+                                      <AxisBadge eje="estrategica" p={cl.estrategica} direccion={cl.fuenteEstrategica === 'direccion'} />
+                                      <AxisBadge eje="operativa" p={cl.operativa} direccion={cl.fuenteOperativa === 'direccion'} />
                                     </span>
-                                  </span>
+                                  )}
                                 </td>
                                 <td>
                                   <select className="input input-sm" value={c.destino} disabled={dis} onChange={(e) => setChoice(row.key, { destino: e.target.value })} aria-label={`Importar ${row.ref} como`}>

@@ -16,7 +16,7 @@ Tiempo estimado: **30–40 minutos** la primera vez. No requiere programar.
 ## 2. Crear las tablas y la seguridad
 
 1. En el proyecto: **SQL Editor → New query**.
-2. Copia todo el contenido de [`supabase/migrations/0001_alignment_unblock.sql`](../supabase/migrations/0001_alignment_unblock.sql), pégalo y presiona **Run**.
+2. Copia todo el contenido de [`supabase/migrations/0001_alignment_unblock.sql`](../supabase/migrations/0001_alignment_unblock.sql), pégalo y presiona **Run**. Repite con [`0002_prioridad_dos_ejes.sql`](../supabase/migrations/0002_prioridad_dos_ejes.sql) (bitácora de prioridades y acuerdo protegido en el servidor). Ejecútalos en orden; los dos se pueden volver a ejecutar sin perder información.
 3. En una consulta nueva, date acceso de administrador **con tu correo** y presiona **Run**:
 
    ```sql

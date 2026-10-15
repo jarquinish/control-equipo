@@ -84,19 +84,31 @@ test('flujo completo de dos semanas', async ({ page }, testInfo) => {
   await page.getByLabel('Mover «Reporte de pauta» a').selectOption('eliminar');
   await expect(page.getByTestId('quadrant-eliminar')).toContainText('Reporte de pauta');
 
-  // Paso 4 · Priorizar (recalcular + override)
+  // Paso 4 · Priorizar (dos ejes + validación directiva)
   await page.getByTestId('next-step').click();
-  await expect(page.getByTestId('count-P1')).toHaveText('2'); // Qué es SOC (8), Convención (9)
+  // Qué es SOC: matriz estratégica de Contenido · Convención: matriz de urgencias de Diseño y Marketing Digital
+  await expect(page.getByTestId('count-P1E')).toHaveText('1');
+  await expect(page.getByTestId('count-P1U')).toHaveText('2');
+  await expect(page.getByTestId('count-P1C')).toHaveText('0');
   const kvRow = page.getByTestId('prio-row').filter({ hasText: 'KV Convención' });
-  await expect(kvRow).toContainText('7');
+  await expect(kvRow.locator('.score-num')).toHaveText('7');
   await kvRow.getByRole('radio', { name: /^Urgencia de KV Convención 3:/ }).check({ force: true });
   await expect(kvRow.locator('.score-num')).toHaveText('8');
-  await expect(page.getByTestId('count-P1')).toHaveText('3');
+  await expect(kvRow).toHaveAttribute('data-clasif', 'P1U');
+  await expect(page.getByTestId('prio-row').filter({ hasText: 'Catálogo merch' })).toHaveAttribute('data-clasif', 'P2');
   await page.getByRole('button', { name: 'Ajustar prioridad de Catálogo merch' }).click();
-  await dialog(page).locator('label.radio-card', { hasText: 'P1' }).click();
-  await dialog(page).getByLabel('Motivo (opcional)').fill('Temporada alta de pedidos');
-  await dialog(page).getByRole('button', { name: 'Aplicar' }).click();
-  await expect(page.getByTestId('count-P1')).toHaveText('4');
+  await dialog(page).getByRole('radio', { name: 'Prioridad operativa (urgente) P1' }).check({ force: true });
+  await dialog(page).getByRole('button', { name: 'Validar prioridad' }).click();
+  await expect(dialog(page)).toContainText('Escribe el motivo');
+  await dialog(page).getByLabel('Motivo prioridad operativa (urgente)').fill('Temporada alta de pedidos');
+  await dialog(page).getByRole('button', { name: 'Validar prioridad' }).click();
+  await expect(dialog(page)).toHaveCount(0);
+  await expect(page.getByTestId('count-P1U')).toHaveText('3');
+  await expect(page.getByTestId('prio-row').filter({ hasText: 'Catálogo merch' })).toHaveAttribute('data-clasif', 'P1U');
+  // Dirección cierra el acuerdo de prioridades
+  await page.getByTestId('close-agreement').click();
+  await dialog(page).getByRole('button', { name: 'Cerrar acuerdo' }).click();
+  await expect(page.locator('[data-testid="prio-row"] .lock-badge')).toHaveCount(5);
 
   // Paso 5 · Detectar
   await page.getByTestId('next-step').click();

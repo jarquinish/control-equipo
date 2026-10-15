@@ -3,13 +3,15 @@ import { AlertOctagon, Archive, ArrowLeft, CheckCircle2, ListPlus, Pencil, Rotat
 import { DEPENDENCY_LABELS, IMPACT_HINTS, IMPACT_LABELS, QUADRANT_LABELS, URGENCY_LABELS } from '../../domain/constants';
 import { fmtDate, fmtDateTime } from '../../domain/dates';
 import { blockIsManaged, dependencyLabel, isActiveProject, isOpenCommitment, personName, sortWeeks } from '../../domain/selectors';
-import { useActiveWeek, useApp, useDb, useServices, useSettings } from '../../state/app';
+import { useActiveWeek, useApp, useCurrentUser, useDb, useServices, useSettings } from '../../state/app';
 import { Link, navigate } from '../../state/router';
-import { AreaDot, BlockedChip, BlockStatusChip, Chip, PriorityBadge, ProjectStatusChip, QuadrantChip } from '../../ui/badges';
+import { AreaDot, AxisBadge, BlockedChip, BlockStatusChip, Chip, ClassBadge, LockBadge, PriorityBadge, ProjectStatusChip, QuadrantChip } from '../../ui/badges';
 import { EmptyState, Section } from '../../ui/common';
 import { useFeedback } from '../../ui/feedback';
 import { CommitmentTable } from '../commitments/CommitmentTable';
 import { useModals } from '../modals/ModalHost';
+import { PriorityPanel } from './PriorityPanel';
+import { can } from '../../domain/permissions';
 
 export function ProjectDetailPage({ id }: { id: string }) {
   const db = useDb();
@@ -18,6 +20,7 @@ export function ProjectDetailPage({ id }: { id: string }) {
   const active = useActiveWeek();
   const modals = useModals();
   const { now } = useApp();
+  const user = useCurrentUser();
   const { run, confirm } = useFeedback();
   const p = db.projects.find((x) => x.id === id);
   const [commenting, setCommenting] = useState(false);
@@ -86,7 +89,16 @@ export function ProjectDetailPage({ id }: { id: string }) {
       <header className="project-head card">
         <div className="project-head-main">
           <div className="row gap wrap">
-            <PriorityBadge p={p.prioridadFinal} override={p.ajusteDireccion} size="lg" />
+            {p.clasif ? (
+              <>
+                <ClassBadge c={p.clasif.integrada} size="lg" />
+                <AxisBadge eje="estrategica" p={p.clasif.estrategica} direccion={p.clasif.fuenteEstrategica === 'direccion'} />
+                <AxisBadge eje="operativa" p={p.clasif.operativa} direccion={p.clasif.fuenteOperativa === 'direccion'} />
+              </>
+            ) : (
+              <PriorityBadge p={p.prioridadFinal} override={p.ajusteDireccion} size="lg" />
+            )}
+            {p.acuerdo?.bloqueado && <LockBadge />}
             <ProjectStatusChip status={p.estado} />
             {p.bloqueado && <BlockedChip />}
             <QuadrantChip q={p.eisenhower} />
@@ -110,6 +122,16 @@ export function ProjectDetailPage({ id }: { id: string }) {
               <dt>Depende de</dt>
               <dd>{p.dependeDe ? dependencyLabel(db, p.dependeDe) : '—'}</dd>
             </div>
+            <div>
+              <dt>Solicitante</dt>
+              <dd>{p.solicitante || '—'}</dd>
+            </div>
+            {p.frente && (
+              <div>
+                <dt>Frente</dt>
+                <dd>{p.frente}</dd>
+              </div>
+            )}
           </dl>
         </div>
         {editable && (
@@ -125,9 +147,11 @@ export function ProjectDetailPage({ id }: { id: string }) {
                 <button className="btn btn-secondary" onClick={() => modals.open({ type: 'commitment', projectId: p.id })}>
                   <ListPlus size={16} aria-hidden /> Nuevo compromiso
                 </button>
-                <button className="btn btn-secondary" onClick={() => modals.open({ type: 'override', projectId: p.id })}>
-                  <Scale size={16} aria-hidden /> Ajuste Dirección
-                </button>
+                {can(user, 'project.override') && (
+                  <button className="btn btn-secondary" onClick={() => modals.open({ type: 'override', projectId: p.id })}>
+                    <Scale size={16} aria-hidden /> Validación directiva
+                  </button>
+                )}
                 <button className="btn btn-ghost" onClick={() => setCommenting(true)}>
                   <MessageSquarePlus size={16} aria-hidden /> Comentario
                 </button>
@@ -169,8 +193,10 @@ export function ProjectDetailPage({ id }: { id: string }) {
         </form>
       )}
 
+      <PriorityPanel p={p} />
+
       <div className="two-col">
-        <Section title="Ponderación">
+        <Section title="Ponderación de la gerencia">
           <dl className="scoring-detail">
             <div>
               <dt>Impacto</dt>
@@ -194,15 +220,12 @@ export function ProjectDetailPage({ id }: { id: string }) {
             <div className="score-total">
               <dt>Score</dt>
               <dd>
-                <strong className="score-num">{p.score}</strong> → calculada <PriorityBadge p={p.prioridadCalculada} /> · final <PriorityBadge p={p.prioridadFinal} override={p.ajusteDireccion} />
+                <strong className="score-num">{p.score}</strong>
+                {p.clasif?.scoreOperativo !== undefined && <span className="small muted"> · score operativo {p.clasif.scoreOperativo}</span>}
               </dd>
             </div>
           </dl>
-          {p.ajusteDireccion && (
-            <p className="alert alert-blue">
-              Ajuste de Dirección{p.motivoAjuste ? `: ${p.motivoAjuste}` : ''}.
-            </p>
-          )}
+          {p.notaRevalidar && <p className="alert alert-yellow">Por revalidar: {p.notaRevalidar}.</p>}
           <p className="small muted">Eisenhower: {QUADRANT_LABELS[p.eisenhower]}</p>
         </Section>
 
@@ -215,7 +238,7 @@ export function ProjectDetailPage({ id }: { id: string }) {
                 <li key={week.id}>
                   <span className="evo-week">Semana {week.numero}</span>
                   <span className="evo-arrow" aria-hidden>→</span>
-                  <PriorityBadge p={u!.prioridad} override={u!.ajusteDireccion} />
+                  {u!.clasificacion ? <ClassBadge c={u!.clasificacion} /> : <PriorityBadge p={u!.prioridad} override={u!.ajusteDireccion} />}
                   {u!.bloqueado && <Chip tone="red">Bloqueado</Chip>}
                   {u!.estado === 'completado' && <Chip tone="green">Cerrado</Chip>}
                   {u!.estado !== 'completado' && !u!.bloqueado && <span className="small muted">{settings.statusLabels[u!.estado]}</span>}

@@ -68,6 +68,24 @@ test('multiusuario: acceso, roles, datos compartidos y sesión', async ({ browse
   await admin.goto('/compromisos');
   await expect(admin.getByTestId('commitment-row').filter({ hasText: 'Validar presupuesto con Comercial' })).toBeVisible();
 
+  // Dirección cierra el acuerdo de prioridad: el gerente ya no cambia la ponderación (también lo impide el servidor)
+  await admin.goto('/proyectos');
+  await admin.getByTestId('project-row').first().click();
+  await expect(admin.getByTestId('why-priority')).toContainText('P1 Urgente');
+  await admin.getByTestId('lock-toggle').click();
+  await admin.getByRole('dialog').getByRole('button', { name: 'Cerrar acuerdo' }).click();
+  await expect(admin.getByTestId('why-priority')).toContainText('Acuerdo cerrado');
+  await expect(admin.getByTestId('priority-log')).toContainText('Cerrado');
+  await ger.goto('/proyectos');
+  await ger.reload();
+  await expect(ger.getByTestId('project-row').first()).toContainText('Acuerdo cerrado');
+  await ger.getByTestId('project-row').first().click();
+  await expect(ger.getByRole('button', { name: 'Validación directiva' })).toHaveCount(0);
+  await expect(ger.getByTestId('lock-toggle')).toHaveCount(0);
+  await ger.getByRole('button', { name: 'Actualizar', exact: true }).click();
+  await expect(ger.getByRole('dialog').getByRole('radio', { name: /^Urgencia 1:/ })).toBeDisabled();
+  await ger.getByRole('dialog').getByRole('button', { name: 'Cancelar' }).click();
+
   // Correo sin acceso
   const ctxX = await browser.newContext();
   const x = await ctxX.newPage();

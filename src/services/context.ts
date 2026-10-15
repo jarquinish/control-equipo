@@ -1,7 +1,7 @@
 import { repository, type Repository } from '../data/repository';
 import type { DataStore } from '../data/store';
 import { getActiveWeek, getSettings } from '../domain/selectors';
-import type { CollectionName, Settings, Week } from '../domain/types';
+import { COLLECTIONS, type CollectionName, type Settings, type Week } from '../domain/types';
 
 export type Repos = { [C in CollectionName]: Repository<C> };
 
@@ -17,11 +17,7 @@ export interface ServiceContext {
 }
 
 export function createContext(store: DataStore, now: () => Date = () => new Date()): ServiceContext {
-  const names: CollectionName[] = [
-    'areas', 'people', 'projects', 'weeks', 'weeklyUpdates', 'areaUpdates',
-    'blocks', 'commitments', 'sessions', 'decisions', 'snapshots', 'settings',
-  ];
-  const repos = Object.fromEntries(names.map((c) => [c, repository(store, c)])) as Repos;
+  const repos = Object.fromEntries(COLLECTIONS.map((c) => [c, repository(store, c)])) as Repos;
   return {
     store,
     repos,

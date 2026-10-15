@@ -6,6 +6,7 @@ La app se publica como **una página de HubSpot** creada con una **plantilla de 
 |---|---|---|
 | `alignment-unblock-hubspot.html` | La app completa en un solo archivo: plantilla de página de HubSpot. | Equipo web (HubSpot) |
 | `0001_alignment_unblock.sql` | Tablas y seguridad de la base de datos. | Quien administre Supabase |
+| `0002_prioridad_dos_ejes.sql` | Prioridad en dos ejes: bitácora inalterable y acuerdo de prioridades protegido en el servidor. | Quien administre Supabase |
 | `Plantilla_Inventario_Alignment_Unblock.xlsx` | Formato para que cada área cargue sus proyectos. | Gerentes |
 
 > **No subas el .html al Administrador de archivos (Files).** HubSpot sirve los .html de *Files* como texto plano en su dominio y la app no abriría. Va en el **Design Manager** como plantilla.
@@ -17,7 +18,7 @@ Tiempo estimado: 45–60 min la primera vez.
 ## 1. Base de datos (Supabase)
 
 1. <https://supabase.com> → **New project** → nombre `alignment-unblock`, región *East US* (o la más cercana). Guarda la contraseña.
-2. **SQL Editor → New query** → pega todo `0001_alignment_unblock.sql` → **Run**.
+2. **SQL Editor → New query** → pega todo `0001_alignment_unblock.sql` → **Run**. Después, en otra consulta, `0002_prioridad_dos_ejes.sql` → **Run**.
 3. Nueva consulta, con el correo de quien administrará la herramienta → **Run**:
 
    ```sql
@@ -78,7 +79,9 @@ Mientras no haya SMTP (Resend), se entra con **correo y contraseña** y no se en
 
 ## Actualizar a una versión nueva
 
-Design Manager → abre `alignment-unblock` → copia tu bloque `AU_CONFIG` → pega el nuevo archivo completo → vuelve a poner tu bloque `AU_CONFIG` → **Publicar cambios**. Los datos no se tocan (están en Supabase). Si la versión trae un nuevo `.sql`, ejecútalo en Supabase antes (se puede ejecutar varias veces sin perder información).
+**Primero la base, después la plantilla.** Si la versión trae un `.sql` nuevo (p. ej. `0002_prioridad_dos_ejes.sql`), ejecútalo en Supabase → SQL Editor **antes** de publicar la plantilla: sin él, la versión nueva no puede guardar la bitácora de prioridades.
+
+Design Manager → abre `alignment-unblock` → copia tu bloque `AU_CONFIG` → pega el nuevo archivo completo → vuelve a poner tu bloque `AU_CONFIG` → **Publicar cambios**. Los datos no se tocan (están en Supabase). Los `.sql` se pueden ejecutar varias veces sin perder información. La primera vez que Dirección entra a la versión nueva, los ajustes del modelo anterior quedan como *nota por revalidar* y se calcula la clasificación de todos los proyectos.
 
 ## Si algo no funciona
 
@@ -88,6 +91,7 @@ Design Manager → abre `alignment-unblock` → copia tu bloque `AU_CONFIG` → 
 | Se ve el código fuente en lugar de la app | Se subió a *Files* en vez del Design Manager. |
 | «Tu correo aún no tiene acceso» | Falta darlo de alta en **Configuración → Accesos**. |
 | No llega el código | SMTP sin configurar o el correo en cuarentena; revisar paso 1.6. |
+| «Tu rol no permite guardar este cambio» al validar prioridades | Falta ejecutar `0002_prioridad_dos_ejes.sql`, o la persona no tiene rol Dirección/Administrador. |
 | Error al conectar | El dominio tiene una política de seguridad (CSP) que bloquea `*.supabase.co`; agrégalo a `connect-src`. |
 
 Cómo se generó: `npm run build:hubspot` → `dist-hubspot/alignment-unblock-hubspot.html` (un solo archivo, rutas con `#`, el código de la app dentro de `{% raw %}` para que HubL no lo procese). Prueba automática: `npm run test:e2e:hubspot` (simula la página de HubSpot contra una base tipo Supabase local: inicio de sesión, importación de Excel por dos usuarios y datos compartidos).

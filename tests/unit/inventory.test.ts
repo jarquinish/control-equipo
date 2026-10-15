@@ -92,9 +92,11 @@ describe('inventario: interpretación y plan', () => {
     expect(msgs('Contenido#6')).toContain('interpretada como 2026-10-12');
     expect(msgs('Contenido#7')).toContain('Fecha de entrega «Semanal» no reconocida');
     expect(msgs('Contenido#7')).toContain('no tiene responsable, fecha');
-    expect(msgs('Contenido#11')).toContain('La IA propuso P2; la fórmula da P1 (score 8)');
-    // Prioridad validada distinta a la fórmula → ajuste de Dirección
-    expect(plan.projects.find((p) => p.nombre === 'Reporte de KPIs')!.override).toEqual({ prioridad: 'P1', motivo: expect.any(String) });
+    // «Prioridad validada» del formato anterior: no se aplica, queda como nota por revalidar
+    expect(msgs('Contenido#8')).toContain('«Prioridad validada» P1 del formato anterior: queda como nota por revalidar.');
+    const kpisPlan = plan.projects.find((p) => p.nombre === 'Reporte de KPIs')!;
+    expect(kpisPlan.notaRevalidar).toBe('«Prioridad validada» P1 del formato anterior');
+    expect(kpisPlan.clasif?.integrada).toBe('P2');
     // Al clasificar el impacto en la vista previa, el aviso desaparece
     const fixed = buildPlan(inv, { ...choices, 'Contenido#5': { ...choices['Contenido#5'], impacto: 2, impactoOk: true } }, o, db);
     expect(fixed.issues['Contenido#5'].map((i) => i.msg).join()).not.toContain('clasifícalo');
@@ -120,7 +122,8 @@ describe('inventario: interpretación y plan', () => {
       ]),
     );
     const kpis = state.projects.find((p) => p.ref === 'T-04')!;
-    expect(kpis).toMatchObject({ prioridadCalculada: 'P2', prioridadFinal: 'P1', ajusteDireccion: true });
+    expect(kpis).toMatchObject({ prioridadCalculada: 'P2', prioridadFinal: 'P2', ajusteDireccion: false, notaRevalidar: '«Prioridad validada» P1 del formato anterior' });
+    expect(kpis.clasif?.avisos.join(' ')).toContain('Por revalidar');
     const frente = state.projects.find((p) => p.nombre === 'Coberturas semanales')!;
     expect(frente.descripcion).toContain('Actividades:\n- Cobertura evento A');
     // Aparece en la semana activa (dashboard)

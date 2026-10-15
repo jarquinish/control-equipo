@@ -1,9 +1,9 @@
 import { excelFractionToTime, excelSerialToDate, type CellValue, type WorkbookData } from '../data/xlsx';
 import { DEFAULT_STATUS_LABELS, DEPENDENCY_LABELS, DIRECCION, IMPACT_LABELS, URGENCY_LABELS } from './constants';
 import { isValidDate, isValidTime } from './dates';
-import { computePriority } from './scoring';
+import { classifyProject, DEFAULT_MATRIX, normName } from './priority';
 import { getSettings, isActiveProject } from './selectors';
-import type { DbData, Level, Priority, ProjectStatus, Role } from './types';
+import type { DbData, Level, Priority, Project, ProjectClasif, ProjectStatus, Role } from './types';
 
 /**
  * Importación del inventario de proyectos desde Excel (una hoja por área).
@@ -32,6 +32,13 @@ export type Field =
   | 'dependencia'
   | 'prioIA'
   | 'prioValidada'
+  | 'solicitante'
+  | 'prioEstDir'
+  | 'motivoEst'
+  | 'prioOpDir'
+  | 'motivoOp'
+  | 'iniciativa'
+  | 'validacionDir'
   | 'hito'
   | 'accion'
   | 'accionResp'
@@ -71,6 +78,13 @@ const HEADERS: Record<Field, string[]> = {
   dependencia: ['dependencia'],
   prioIA: ['prioridad ia'],
   prioValidada: ['prioridad validada'],
+  solicitante: ['solicitante', 'solicitante / cliente interno', 'cliente interno'],
+  prioEstDir: ['prioridad estrategica (direccion)', 'prioridad estrategica direccion'],
+  motivoEst: ['motivo prioridad estrategica', 'motivo de prioridad estrategica'],
+  prioOpDir: ['prioridad operativa (direccion)', 'prioridad operativa direccion'],
+  motivoOp: ['motivo prioridad operativa', 'motivo de prioridad operativa'],
+  iniciativa: ['iniciativa (matriz)', 'iniciativa de la matriz', 'iniciativa'],
+  validacionDir: ['validacion directiva'],
   hito: ['proximo hito'],
   accion: ['siguiente accion concreta', 'siguiente accion'],
   accionResp: ['responsable siguiente accion'],
@@ -104,11 +118,16 @@ export const TEMPLATE_COLUMNS: { field: Field; header: string; width: number; hi
   { field: 'objetivo', header: 'Objetivo / entregable', width: 38, hint: '¿Qué resultado entrega?' },
   { field: 'owner', header: 'Owner operativo', width: 20, hint: 'UNA persona responsable del proyecto.' },
   { field: 'gerente', header: 'Gerente responsable', width: 20, hint: 'Gerente del área.' },
+  { field: 'solicitante', header: 'Solicitante', width: 20, hint: 'Quién pide el trabajo: Brokers, Dirección Comercial, Dirección General, otra área…' },
   { field: 'estado', header: 'Estado', width: 14, hint: 'Por iniciar, En curso, En riesgo, En pausa, Completado o Archivado.' },
   { field: 'impacto', header: 'Impacto', width: 13, hint: 'Operación (ejecución básica) · Estrategia (posicionamiento de marca) · Negocio (venta, oficinas, franquicias, talento).' },
   { field: 'urgencia', header: 'Urgencia', width: 24, hint: 'Puede esperar · Debe avanzar esta semana · Deadline inmediato.' },
   { field: 'dependencia', header: 'Dependencia', width: 30, hint: 'Prácticamente autónomo · Depende de otra área / persona · Varias áreas / Dirección / tercero.' },
-  { field: 'prioValidada', header: 'Prioridad validada', width: 12, hint: 'Sólo si la gerencia decide una prioridad distinta a la fórmula (queda como ajuste de Dirección).' },
+  { field: 'prioEstDir', header: 'Prioridad estratégica (Dirección)', width: 14, hint: 'Sólo Dirección: P1, P2 o P3. Prevalece sobre el cálculo. Requiere motivo.' },
+  { field: 'motivoEst', header: 'Motivo prioridad estratégica', width: 28, hint: 'Obligatorio si se fija la prioridad estratégica.' },
+  { field: 'prioOpDir', header: 'Prioridad operativa (Dirección)', width: 14, hint: 'Sólo Dirección: P1, P2 o P3. Prevalece sobre el cálculo. Requiere motivo.' },
+  { field: 'motivoOp', header: 'Motivo prioridad operativa', width: 28, hint: 'Obligatorio si se fija la prioridad operativa.' },
+  { field: 'iniciativa', header: 'Iniciativa (matriz)', width: 22, hint: 'Iniciativa de la matriz directiva a la que pertenece (p. ej. SOC TV, Convención SOC). Dirección la confirma.' },
   { field: 'hito', header: 'Próximo hito', width: 26, hint: 'Siguiente punto de control.' },
   { field: 'accion', header: 'Siguiente acción concreta', width: 34, hint: 'Se registra como compromiso si tiene responsable y fecha.' },
   { field: 'accionResp', header: 'Responsable siguiente acción', width: 20, hint: 'UNA persona.' },
@@ -127,6 +146,7 @@ export const TEMPLATE_COLUMNS: { field: Field; header: string; width: number; hi
   { field: 'motivoDesp', header: 'Motivo del desplazamiento', width: 24, hint: '' },
   { field: 'decision', header: 'Decisión requerida', width: 24, hint: 'Decisión pendiente para la junta.' },
   { field: 'validacion', header: 'Validación gerencia', width: 14, hint: 'Sólo se importan las filas Validado o Modificado.' },
+  { field: 'validacionDir', header: 'Validación directiva', width: 14, hint: 'Sólo Dirección: «Validado» cierra el acuerdo de prioridad del proyecto.' },
   { field: 'observaciones', header: 'Observaciones gerencia', width: 28, hint: '' },
 ];
 
@@ -136,7 +156,11 @@ export const TEMPLATE_LISTS: Partial<Record<Field, string[]>> = {
   impacto: [IMPACT_LABELS[1], IMPACT_LABELS[2], IMPACT_LABELS[3]],
   urgencia: [URGENCY_LABELS[1], URGENCY_LABELS[2], URGENCY_LABELS[3]],
   dependencia: ['Prácticamente autónomo', 'Depende de otra área / persona', 'Varias áreas / Dirección / tercero'],
-  prioValidada: ['P1', 'P2', 'P3'],
+  prioEstDir: ['P1', 'P2', 'P3'],
+  prioOpDir: ['P1', 'P2', 'P3'],
+  iniciativa: DEFAULT_MATRIX.iniciativas.filter((i) => i.tipo === 'proyecto').map((i) => i.nombre),
+  solicitante: DEFAULT_MATRIX.iniciativas.filter((i) => i.tipo === 'solicitante').map((i) => i.nombre),
+  validacionDir: ['Pendiente', 'Validado'],
   bloqueado: ['Sí', 'No'],
   validacion: ['Pendiente', 'Validado', 'Modificado', 'Descartado'],
 };
@@ -170,7 +194,13 @@ export interface InventoryRow {
   urgencia: Level;
   dependencia: Level;
   prioridadIA?: Priority;
-  prioridadValidada?: Priority;
+  /** «Prioridad validada» del formato anterior: queda como nota por revalidar. */
+  notaRevalidar?: string;
+  solicitante?: string;
+  directiva: { estrategica?: Priority; motivoEstrategica?: string; operativa?: Priority; motivoOperativa?: string };
+  /** Iniciativa de la matriz indicada en el archivo (clave). */
+  iniciativaKey?: string;
+  validacionDirectiva: boolean;
   personas: { owner: string[]; accion: string[]; solucion: string[] };
   fecha?: string;
   hora?: string;
@@ -221,6 +251,10 @@ export interface ImportOptions {
   sheetAreas: Record<string, string>;
   /** Fecha de hoy (AAAA-MM-DD) para detectar compromisos vencidos. */
   today: string;
+  /** Quien importa es Dirección: se aplican prioridades, iniciativas y validación directiva. */
+  esDireccion?: boolean;
+  /** Actualiza los datos de prioridad de proyectos que ya existen (por ID o nombre). */
+  updateExisting?: boolean;
 }
 
 export interface PlannedCommitment {
@@ -254,13 +288,39 @@ export interface PlannedProject {
   dependencia: Level;
   estado: ProjectStatus;
   dependeDe?: string;
-  override?: { prioridad: Priority; motivo: string };
+  solicitante?: string;
+  frente?: string;
+  notaRevalidar?: string;
+  directiva?: PlannedDirective;
+  /** Iniciativa confirmada por Dirección en el archivo. */
+  iniciativa?: string;
+  cerrarAcuerdo?: boolean;
+  /** Clasificación prevista (vista previa). */
+  clasif?: ProjectClasif;
   commitments: PlannedCommitment[];
   blocks: PlannedBlock[];
   /** Actividades agrupadas (una línea por actividad, se agregan a la descripción). */
   actividades: string[];
   rows: string[];
   esFrente?: boolean;
+}
+
+export interface PlannedDirective {
+  estrategica?: Priority;
+  motivoEstrategica?: string;
+  operativa?: Priority;
+  motivoOperativa?: string;
+}
+
+/** Actualización de datos de prioridad de un proyecto existente. */
+export interface PlannedUpdate {
+  rowKey: string;
+  projectId: string;
+  nombre: string;
+  patch: Partial<Pick<Project, 'impacto' | 'urgencia' | 'dependencia' | 'solicitante' | 'frente'>>;
+  directiva?: PlannedDirective;
+  iniciativa?: string;
+  cerrarAcuerdo?: boolean;
 }
 
 /** Descripción final: la del proyecto más la lista de actividades agrupadas. */
@@ -271,6 +331,7 @@ export function plannedDescription(p: PlannedProject): string {
 
 export interface Plan {
   projects: PlannedProject[];
+  updates: PlannedUpdate[];
   newPeople: { nombre: string; areaId?: string; rol: Role }[];
   /** Avisos vigentes por fila. */
   issues: Record<string, Issue[]>;
@@ -284,8 +345,8 @@ export interface Plan {
     personas: number;
     omitidas: number;
     avisos: number;
-    p1: number;
-    porArea: Record<string, { nuevos: number; activos: number }>;
+    actualizados: number;
+    porArea: Record<string, { nuevos: number; activos: number; urgentes: number; estrategicos: number }>;
   };
 }
 
@@ -563,6 +624,7 @@ function findHeader(rows: CellValue[][]): { row: number; cols: Partial<Record<Fi
 
 export function parseInventory(wb: WorkbookData, db: DbData, today: string): Inventory {
   const ctx = makeCtx(db);
+  const matrix = getSettings(db).priorityMatrix ?? DEFAULT_MATRIX;
   const sheets: InventorySheet[] = [];
   const ignored: string[] = [];
   type Pending = { sheet: string; areaId: string; headerRow: number; rows: { r: number; cells: Partial<Record<Field, CellValue>> }[] };
@@ -661,7 +723,23 @@ export function parseInventory(wb: WorkbookData, db: DbData, today: string): Inv
       const existing = db.projects.find(
         (x) => x.areaId === p.areaId && ((raw.ref && x.ref === raw.ref) || norm(x.nombre) === norm(nombre)) && x.estado !== 'archivado',
       );
-      if (existing) issues.push({ level: 'info', msg: `Ya existe en la herramienta («${existing.nombre}»): se omite para no duplicarlo.` });
+      if (existing) issues.push({ level: 'info', msg: `Ya existe en la herramienta («${existing.nombre}»).` });
+      const prioV = parsePriority(raw.prioValidada ?? '');
+      const directiva = {
+        estrategica: parsePriority(raw.prioEstDir ?? ''),
+        motivoEstrategica: raw.motivoEst,
+        operativa: parsePriority(raw.prioOpDir ?? ''),
+        motivoOperativa: raw.motivoOp,
+      };
+      if (raw.prioEstDir && !directiva.estrategica) issues.push({ level: 'warn', msg: `Prioridad estratégica «${raw.prioEstDir}» no reconocida (usa P1, P2 o P3).` });
+      if (raw.prioOpDir && !directiva.operativa) issues.push({ level: 'warn', msg: `Prioridad operativa «${raw.prioOpDir}» no reconocida (usa P1, P2 o P3).` });
+      let iniciativaKey: string | undefined;
+      if (raw.iniciativa) {
+        const n = normName(raw.iniciativa);
+        const found = matrix.iniciativas.find((i) => normName(i.nombre) === n || normName(i.key) === n || i.alias.some((a) => normName(a) === n));
+        if (found) iniciativaKey = found.key;
+        else issues.push({ level: 'warn', msg: `Iniciativa «${raw.iniciativa}» no está en la matriz directiva.` });
+      }
 
       rows.push({
         key: `${p.sheet}#${r}`,
@@ -680,7 +758,11 @@ export function parseInventory(wb: WorkbookData, db: DbData, today: string): Inv
         urgencia: urg.level ?? 2,
         dependencia: dep.level ?? 2,
         prioridadIA: parsePriority(raw.prioIA ?? ''),
-        prioridadValidada: parsePriority(raw.prioValidada ?? ''),
+        notaRevalidar: prioV ? `«Prioridad validada» ${prioV} del formato anterior` : undefined,
+        solicitante: raw.solicitante,
+        directiva,
+        iniciativaKey,
+        validacionDirectiva: parseValidation(raw.validacionDir ?? '') === 'validado',
         personas: { owner, accion, solucion },
         fecha: f.date,
         hora,
@@ -770,6 +852,53 @@ export function buildPlan(inv: Inventory, choices: Record<string, RowChoice>, op
   const issues: Record<string, Issue[]> = {};
   const included: Record<string, boolean> = {};
   const projects = new Map<string, PlannedProject>();
+  const updates: PlannedUpdate[] = [];
+  const settings = getSettings(db);
+  const matrix = settings.priorityMatrix ?? DEFAULT_MATRIX;
+  const areaName = (id: string) => db.areas.find((a) => a.id === id)?.nombre ?? '';
+  /** Clasificación prevista de un proyecto del plan (misma lógica que la herramienta). */
+  const preview = (pp: PlannedProject): ProjectClasif => {
+    const draft = {
+      id: `draft:${pp.key}`,
+      nombre: pp.nombre,
+      frente: pp.frente,
+      solicitante: pp.solicitante,
+      impacto: pp.impacto,
+      urgencia: pp.urgencia,
+      dependencia: pp.dependencia,
+      fechaObjetivo: pp.fechaObjetivo,
+      bloqueado: pp.blocks.length > 0,
+      prioridadDireccion: pp.directiva,
+      vinculos: pp.iniciativa ? [{ iniciativa: pp.iniciativa, estado: 'validado' as const }] : undefined,
+      notaRevalidar: pp.notaRevalidar,
+    } as Project;
+    const fechas = [...pp.commitments, ...pp.blocks.flatMap((b) => (b.commitment ? [b.commitment] : []))].map((c) => ({ fecha: c.fecha }));
+    return classifyProject(draft, { matrix, areaNombre: areaName(pp.areaId), openCommitments: fechas, today: opts.today, umbralP1: settings.criteria.umbralOperativoP1, umbralP2: settings.criteria.umbralOperativoP2 });
+  };
+  /** Datos que sólo Dirección puede fijar desde el archivo. */
+  const directives = (row: InventoryRow, warn: (m: string) => void, info: (m: string) => void) => {
+    const d = row.directiva;
+    const wants = !!(d.estrategica || d.operativa || row.iniciativaKey || row.validacionDirectiva);
+    if (wants && !opts.esDireccion) {
+      info('Prioridad de Dirección, iniciativa y validación directiva se ignoran: sólo Dirección puede fijarlas.');
+      return {};
+    }
+    const directiva: PlannedDirective = {};
+    if (d.estrategica) {
+      if (d.motivoEstrategica) Object.assign(directiva, { estrategica: d.estrategica, motivoEstrategica: d.motivoEstrategica });
+      else warn('Prioridad estratégica de Dirección sin motivo: no se aplica (el motivo es obligatorio).');
+    }
+    if (d.operativa) {
+      if (d.motivoOperativa) Object.assign(directiva, { operativa: d.operativa, motivoOperativa: d.motivoOperativa });
+      else warn('Prioridad operativa de Dirección sin motivo: no se aplica (el motivo es obligatorio).');
+    }
+    if (row.validacionDirectiva) info('Validación directiva: se cerrará el acuerdo de prioridad.');
+    return {
+      directiva: directiva.estrategica || directiva.operativa ? directiva : undefined,
+      iniciativa: row.iniciativaKey,
+      cerrarAcuerdo: row.validacionDirectiva || undefined,
+    };
+  };
   let actividades = 0;
   let omitidas = 0;
 
@@ -780,7 +909,6 @@ export function buildPlan(inv: Inventory, choices: Record<string, RowChoice>, op
     const r = row.raw;
     const lines: string[] = [];
     if (r.objetivo) lines.push(r.objetivo);
-    if (row.padre && norm(row.padre) !== norm(row.nombre)) lines.push(`Frente: ${row.padre}`);
     if (r.hito) lines.push(`Próximo hito: ${r.hito}`);
     if (withAction && r.accion) lines.push(`Siguiente acción: ${r.accion}${r.accionResp ? ` (${r.accionResp})` : ''}${r.fecha ? ` · ${r.fecha}` : ''}`);
     if (r.entregable || r.depArea) lines.push(`Entrega a otra área: ${[r.entregable, r.depArea && `(${r.depArea})`].filter(Boolean).join(' ')}`);
@@ -851,6 +979,34 @@ export function buildPlan(inv: Inventory, choices: Record<string, RowChoice>, op
       const list: Issue[] = [...row.issues];
       issues[row.key] = list;
       const c = choices[row.key];
+      if (row.existingId && areaId && isIncluded(row, opts) && opts.updateExisting && row.kind !== 'omitir') {
+        const warn = (msg: string) => list.push({ level: 'warn', msg });
+        const info = (msg: string) => list.push({ level: 'info', msg });
+        const current = db.projects.find((x) => x.id === row.existingId)!;
+        const locked = current.acuerdo?.bloqueado && !opts.esDireccion;
+        const patch: PlannedUpdate['patch'] = {};
+        if (!locked) {
+          if (c.impactoOk || row.impactoClasificado) patch.impacto = c.impacto;
+          patch.urgencia = row.urgencia;
+          patch.dependencia = row.dependencia;
+          if (row.solicitante) patch.solicitante = row.solicitante;
+          if (row.padre && norm(row.padre) !== norm(row.nombre)) patch.frente = row.padre;
+        } else warn('Acuerdo de prioridad cerrado: sólo Dirección puede cambiar su ponderación; se conserva la actual.');
+        for (const k of Object.keys(patch) as (keyof PlannedUpdate['patch'])[]) if (patch[k] === current[k]) delete patch[k];
+        const d = directives(row, warn, info);
+        if (row.notaRevalidar) info(`${row.notaRevalidar}: queda como nota por revalidar.`);
+        if (Object.keys(patch).length || d.directiva || d.iniciativa || d.cerrarAcuerdo) {
+          updates.push({ rowKey: row.key, projectId: current.id, nombre: current.nombre, patch, ...d });
+          info('Se actualizarán sólo sus datos de prioridad; no se duplica.');
+          included[row.key] = true;
+        } else {
+          info('Sin cambios en sus datos de prioridad.');
+          included[row.key] = false;
+          omitidas++;
+        }
+        continue;
+      }
+      if (row.existingId) list.push({ level: 'info', msg: 'Se omite para no duplicarlo.' });
       const inc = isIncluded(row, opts) && c.destino !== 'omitir';
       included[row.key] = inc;
       if (!areaId) list.unshift({ level: 'info', msg: 'La hoja no está asignada a un área: no se importa.' });
@@ -863,18 +1019,11 @@ export function buildPlan(inv: Inventory, choices: Record<string, RowChoice>, op
       if (c.destino !== 'proyecto') continue;
       const warn = (msg: string) => list.push({ level: 'warn', msg });
       const info = (msg: string) => list.push({ level: 'info', msg });
-      const scoring = computePriority({ impacto: c.impacto, urgencia: row.urgencia, dependencia: row.dependencia });
       if (!row.impactoClasificado && !c.impactoOk) warn(`Impacto «${row.raw.impacto ?? 'vacío'}»: clasifícalo como Operación, Estrategia o Negocio.`);
-      if (!c.responsable) warn(`Sin responsable${scoring.prioridadCalculada === 'P1' ? ': un P1 necesita responsable' : ''}.`);
-      let override: PlannedProject['override'];
-      if (row.prioridadValidada && row.prioridadValidada !== scoring.prioridadCalculada) {
-        override = { prioridad: row.prioridadValidada, motivo: 'Prioridad validada por la gerencia en el inventario.' };
-        info(`Ajuste de Dirección: ${row.prioridadValidada} (la fórmula da ${scoring.prioridadCalculada}).`);
-      } else if (!row.prioridadValidada && row.prioridadIA && row.prioridadIA !== scoring.prioridadCalculada) {
-        warn(`La IA propuso ${row.prioridadIA}; la fórmula da ${scoring.prioridadCalculada} (score ${scoring.score}). Para conservar ${row.prioridadIA}, captura «Prioridad validada».`);
-      }
+      if (row.notaRevalidar) info(`${row.notaRevalidar}: queda como nota por revalidar.`);
+      const d = directives(row, warn, info);
       const ex = extras(row, c, warn);
-      projects.set(`row:${row.key}`, {
+      const planned: PlannedProject = {
         key: `row:${row.key}`,
         areaId,
         nombre: row.nombre,
@@ -887,12 +1036,18 @@ export function buildPlan(inv: Inventory, choices: Record<string, RowChoice>, op
         dependencia: row.dependencia,
         estado: row.estado,
         dependeDe: row.dependeKey,
-        override,
+        solicitante: row.solicitante,
+        frente: row.padre && norm(row.padre) !== norm(row.nombre) ? row.padre : undefined,
+        notaRevalidar: row.notaRevalidar,
+        ...d,
         commitments: ex.commitment ? [ex.commitment] : [],
         blocks: ex.block ? [ex.block] : [],
         actividades: [],
         rows: [row.key],
-      });
+      };
+      planned.clasif = preview(planned);
+      if (!c.responsable) warn(`Sin responsable${planned.clasif.integrada !== 'P2' && planned.clasif.integrada !== 'P3' ? ': un P1 necesita responsable' : ''}.`);
+      projects.set(`row:${row.key}`, planned);
     }
   }
 
@@ -969,17 +1124,27 @@ export function buildPlan(inv: Inventory, choices: Record<string, RowChoice>, op
     });
 
   const list = [...projects.values()];
+  for (const p of list) if (p.esFrente) p.clasif = preview(p);
   const porArea: Plan['stats']['porArea'] = {};
-  for (const a of db.areas) porArea[a.id] = { nuevos: 0, activos: db.projects.filter((p) => p.areaId === a.id && isActiveProject(p)).length };
-  let p1 = db.projects.filter((p) => isActiveProject(p) && p.prioridadFinal === 'P1').length;
+  for (const a of db.areas) {
+    const activos = db.projects.filter((p) => p.areaId === a.id && isActiveProject(p));
+    porArea[a.id] = {
+      nuevos: 0,
+      activos: activos.length,
+      urgentes: activos.filter((p) => p.clasif?.integrada === 'P1C' || p.clasif?.integrada === 'P1U').length,
+      estrategicos: activos.filter((p) => p.clasif?.integrada === 'P1E').length,
+    };
+  }
   for (const p of list) {
-    if (p.existingId) continue;
-    if (porArea[p.areaId]) porArea[p.areaId].nuevos++;
-    const pr = p.override?.prioridad ?? computePriority({ impacto: p.impacto, urgencia: p.urgencia, dependencia: p.dependencia }).prioridadCalculada;
-    if (pr === 'P1') p1++;
+    const st = porArea[p.areaId];
+    if (p.existingId || !st) continue;
+    st.nuevos++;
+    if (p.clasif?.integrada === 'P1C' || p.clasif?.integrada === 'P1U') st.urgentes++;
+    if (p.clasif?.integrada === 'P1E') st.estrategicos++;
   }
   return {
     projects: list,
+    updates,
     newPeople,
     issues,
     included,
@@ -992,7 +1157,7 @@ export function buildPlan(inv: Inventory, choices: Record<string, RowChoice>, op
       personas: newPeople.length,
       omitidas,
       avisos: Object.entries(issues).reduce((n, [k, l]) => n + (included[k] ? l.filter((i) => i.level === 'warn').length : 0), 0),
-      p1,
+      actualizados: updates.length,
       porArea,
     },
   };

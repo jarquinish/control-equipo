@@ -2,12 +2,13 @@ import { useMemo } from 'react';
 import { Download, Layers, Plus } from 'lucide-react';
 import { attentionItems, computeAlerts } from '../../domain/alerts';
 import { PRIORITIES, PROJECT_STATUSES, QUADRANT_LABELS, QUADRANTS } from '../../domain/constants';
-import { fmtDate } from '../../domain/dates';
+import { fmtDate, toISODate } from '../../domain/dates';
+import { attentionOrder, CLASIFICACION_LABELS, CLASIFICACIONES } from '../../domain/priority';
 import { dependencyLabel, isActiveProject, isOverdue, personName, sortProjectsByPriority } from '../../domain/selectors';
-import type { Project } from '../../domain/types';
+import type { Clasificacion, Project } from '../../domain/types';
 import { useApp, useDb, useSettings, useWeekData } from '../../state/app';
 import { Link, navigate, useQuery } from '../../state/router';
-import { AreaDot, BlockedChip, PriorityBadge, ProjectStatusChip, QuadrantChip } from '../../ui/badges';
+import { AreaDot, AxisBadge, BlockedChip, ClassBadge, LockBadge, PriorityBadge, ProjectStatusChip, QuadrantChip } from '../../ui/badges';
 import { downloadFile, EmptyState, PageHeader } from '../../ui/common';
 import { projectsCsv } from '../../services/exportService';
 import { useModals } from '../modals/ModalHost';
@@ -25,6 +26,9 @@ export function ProjectsPage() {
     area: q.get('area') ?? '',
     responsable: q.get('responsable') ?? '',
     prioridad: q.get('prioridad') ?? '',
+    clasif: q.get('clasif') ?? '',
+    est: q.get('est') ?? '',
+    op: q.get('op') ?? '',
     estado: q.get('estado') ?? 'activos',
     bloqueado: q.get('bloqueado') ?? '',
     eisenhower: q.get('eisenhower') ?? '',
@@ -34,18 +38,23 @@ export function ProjectsPage() {
   };
   const filtersOn = Object.entries(f).some(([k, v]) => (k === 'estado' ? v !== 'activos' : !!v));
 
-  const rows = useMemo(() => {
-    if (!data) return [];
+  const { rows, order } = useMemo(() => {
+    if (!data) return { rows: [] as Project[], order: new Map<string, { posicion: number; nivel: number; desatendido: boolean }>() };
     const ref = data.live ? now : data.asOf;
     const base: Project[] = data.live && (f.estado === 'archivado' || f.estado === 'todos') ? db.projects : data.projects;
     const attention = f.atencion ? new Set(attentionItems(data, computeAlerts(db, data, ref)).map((i) => i.project.id)) : null;
     const t = f.texto.toLowerCase();
-    return base
+    const order = attentionOrder(db, base.filter(isActiveProject), toISODate(ref), settings.criteria.diasDesatendido);
+    const cls = (p: Project): Clasificacion | undefined => p.clasif?.integrada;
+    const rows = base
       .filter((p) => {
         if (t && !`${p.nombre} ${p.descripcion}`.toLowerCase().includes(t)) return false;
         if (f.area && p.areaId !== f.area) return false;
         if (f.responsable && p.responsable !== f.responsable) return false;
         if (f.prioridad && p.prioridadFinal !== f.prioridad) return false;
+        if (f.clasif && (f.clasif === 'P1' ? !cls(p)?.startsWith('P1') : cls(p) !== f.clasif)) return false;
+        if (f.est && p.clasif?.estrategica !== f.est) return false;
+        if (f.op && p.clasif?.operativa !== f.op) return false;
         if (f.estado === 'activos' && !isActiveProject(p)) return false;
         if (f.estado !== 'activos' && f.estado !== 'todos' && p.estado !== f.estado) return false;
         if (f.bloqueado === '1' && !p.bloqueado) return false;
@@ -56,8 +65,9 @@ export function ProjectsPage() {
         if (attention && !attention.has(p.id)) return false;
         return true;
       })
-      .sort(sortProjectsByPriority);
-  }, [db, data, now, f.texto, f.area, f.responsable, f.prioridad, f.estado, f.bloqueado, f.eisenhower, f.dependencia, f.vencido, f.atencion]);
+      .sort((a, b) => (order.get(a.id)?.posicion ?? 1e9) - (order.get(b.id)?.posicion ?? 1e9) || sortProjectsByPriority(a, b));
+    return { rows, order };
+  }, [db, data, now, settings.criteria.diasDesatendido, f.texto, f.area, f.responsable, f.prioridad, f.clasif, f.est, f.op, f.estado, f.bloqueado, f.eisenhower, f.dependencia, f.vencido, f.atencion]);
 
   if (!data) return null;
   const responsables = db.people.filter((p) => db.projects.some((x) => x.responsable === p.id));
@@ -70,7 +80,7 @@ export function ProjectsPage() {
         subtitle="No reportamos actividades. Trabajamos sobre proyectos."
         actions={
           <>
-            <button className="btn btn-secondary" onClick={() => downloadFile('proyectos.csv', projectsCsv(db), 'text/csv;charset=utf-8')}>
+            <button className="btn btn-secondary" onClick={() => downloadFile('proyectos.csv', projectsCsv(db, now), 'text/csv;charset=utf-8')}>
               <Download size={16} aria-hidden /> CSV
             </button>
             {!data.readOnly && (
@@ -100,11 +110,28 @@ export function ProjectsPage() {
             </option>
           ))}
         </select>
-        <select className="input" aria-label="Prioridad" value={f.prioridad} onChange={(e) => setQ({ prioridad: e.target.value })}>
-          <option value="">P1 · P2 · P3</option>
+        <select className="input" aria-label="Clasificación" value={f.clasif} onChange={(e) => setQ({ clasif: e.target.value })}>
+          <option value="">Clasificación: todas</option>
+          <option value="P1">Todos los P1</option>
+          {CLASIFICACIONES.map((c) => (
+            <option key={c} value={c}>
+              {CLASIFICACION_LABELS[c]}
+            </option>
+          ))}
+        </select>
+        <select className="input" aria-label="Prioridad estratégica" value={f.est} onChange={(e) => setQ({ est: e.target.value })}>
+          <option value="">Estratégica: todas</option>
           {PRIORITIES.map((p) => (
             <option key={p} value={p}>
-              {p}
+              Estratégica {p}
+            </option>
+          ))}
+        </select>
+        <select className="input" aria-label="Prioridad operativa" value={f.op} onChange={(e) => setQ({ op: e.target.value })}>
+          <option value="">Operativa: todas</option>
+          {PRIORITIES.map((p) => (
+            <option key={p} value={p}>
+              Operativa {p}
             </option>
           ))}
         </select>
@@ -165,7 +192,16 @@ export function ProjectsPage() {
           <table className="table table-hover">
             <thead>
               <tr>
-                <th scope="col">Prioridad</th>
+                <th scope="col" className="num" title="Orden de atención recomendado">
+                  Orden
+                </th>
+                <th scope="col">Clasificación</th>
+                <th scope="col" title="Prioridad estratégica">
+                  E
+                </th>
+                <th scope="col" title="Prioridad operativa (urgente)">
+                  O
+                </th>
                 <th scope="col">Proyecto</th>
                 <th scope="col">Área</th>
                 <th scope="col">Responsable</th>
@@ -179,11 +215,17 @@ export function ProjectsPage() {
             <tbody>
               {rows.map((p) => {
                 const area = db.areas.find((a) => a.id === p.areaId);
+                const c = p.clasif;
+                const o = order.get(p.id);
                 return (
-                  <tr key={p.id} onClick={() => navigate(`/proyectos/${p.id}`)} className="clickable" data-testid="project-row">
-                    <td>
-                      <PriorityBadge p={p.prioridadFinal} override={p.ajusteDireccion} />
+                  <tr key={p.id} onClick={() => navigate(`/proyectos/${p.id}`)} className={`clickable ${c?.integrada === 'P1C' ? 'row-critico' : ''}`} data-testid="project-row" data-clasif={c?.integrada}>
+                    <td className="num" title={o ? `Nivel ${o.nivel}${o.desatendido ? ' · P1 Estratégico desatendido' : ''}` : undefined}>
+                      {o ? <strong>{o.posicion}</strong> : '—'}
+                      {o?.desatendido && <span className="small block warn-text">desatendido</span>}
                     </td>
+                    <td>{c ? <ClassBadge c={c.integrada} /> : <PriorityBadge p={p.prioridadFinal} override={p.ajusteDireccion} />}</td>
+                    <td>{c && <AxisBadge eje="estrategica" p={c.estrategica} direccion={c.fuenteEstrategica === 'direccion'} />}</td>
+                    <td>{c && <AxisBadge eje="operativa" p={c.operativa} direccion={c.fuenteOperativa === 'direccion'} />}</td>
                     <td>
                       <Link to={`/proyectos/${p.id}`} className="cell-title" onClick={(e) => e.stopPropagation()}>
                         {p.nombre}
@@ -191,6 +233,16 @@ export function ProjectsPage() {
                       {p.bloqueado && (
                         <span className="ml-1">
                           <BlockedChip />
+                        </span>
+                      )}
+                      {p.acuerdo?.bloqueado && (
+                        <span className="ml-1">
+                          <LockBadge />
+                        </span>
+                      )}
+                      {c && (c.candidatoP1 || c.porValidar.length > 0 || p.notaRevalidar) && (
+                        <span className="small warn-text block" title={c.avisos.join(' ')}>
+                          {[c.candidatoP1 && !p.prioridadDireccion?.estrategica ? 'Candidato a P1' : '', c.porValidar.length ? 'Vínculo por validar' : '', p.notaRevalidar ? 'Por revalidar' : ''].filter(Boolean).join(' · ')}
                         </span>
                       )}
                       {p.descripcion && <span className="small muted block clamp-1">{p.descripcion}</span>}

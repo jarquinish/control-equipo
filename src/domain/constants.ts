@@ -36,6 +36,11 @@ export const DEFAULT_CRITERIA: Criteria = {
   horasVencePronto: 48,
   umbralReprogramaciones: 2,
   semanasProyectoLargo: 6,
+  maxP1UrgentesPorArea: 3,
+  maxP1EstrategicosPorArea: 3,
+  diasDesatendido: 7,
+  umbralOperativoP1: 7,
+  umbralOperativoP2: 5,
 };
 
 export const LEVELS: Level[] = [1, 2, 3];

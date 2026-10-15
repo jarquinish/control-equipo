@@ -25,6 +25,7 @@ import {
   blocksCsv,
   commitmentsCsv,
   projectsCsv,
+  priorityLogCsv,
 } from "../../services/exportService";
 import {
   useActiveWeek,
@@ -40,6 +41,7 @@ import { Modal } from "../../ui/Modal";
 import { can } from "../../domain/permissions";
 import { bootstrapEmpty } from "../../services";
 import { AccessSection } from "./AccessSection";
+import { MatrixSection } from "./MatrixSection";
 import { useModals } from "../modals/ModalHost";
 import { ensureIdentity } from "../../services/identityService";
 import { demoEnabled } from "../../state/workspace";
@@ -590,7 +592,11 @@ export function SettingsPage() {
                   "maxProyectosPorArea",
                   "Proyectos relevantes por área (Visibilizar)",
                 ],
-                ["maxP1", "Máximo recomendado de P1"],
+                ["maxP1UrgentesPorArea", "Máx. P1 Críticos + Urgentes por gerencia"],
+                ["maxP1EstrategicosPorArea", "Máx. P1 Estratégicos por gerencia"],
+                ["diasDesatendido", "Días sin avance para «P1 Estratégico desatendido»"],
+                ["umbralOperativoP1", "Puntos operativos para P1 urgente"],
+                ["umbralOperativoP2", "Puntos operativos para P2 urgente"],
                 ["horasVencePronto", "Horas para «vence pronto»"],
                 [
                   "umbralReprogramaciones",
@@ -632,11 +638,15 @@ export function SettingsPage() {
             </label>
           </div>
           <p className="small muted">
-            Ponderación fija: Score = Impacto + Urgencia + Dependencia (1–3
-            c/u). 8–9 → P1 · 6–7 → P2 · 3–5 → P3.
+            Prioridad estratégica: matriz directiva (P1) o impacto (Negocio → P2
+            candidato a P1 · Estrategia → P2 · Operación → P3). Prioridad
+            operativa: matriz de urgencias (P1) o Urgencia + Dependencia + fecha
+            compromiso (+2 vencida o ≤ 7 días · +1 8–14 días) + bloqueado (+1).
+            Lo que fija Dirección prevalece.
           </p>
         </Section>
       </fieldset>
+      <MatrixSection allowed={allowed} />
 
       <Section title="Datos, exportación y respaldo" id="cfg-data">
         <div className="data-actions">
@@ -699,7 +709,7 @@ export function SettingsPage() {
                 onClick={() =>
                   downloadFile(
                     "proyectos.csv",
-                    projectsCsv(db),
+                    projectsCsv(db, now),
                     "text/csv;charset=utf-8",
                   )
                 }
@@ -729,6 +739,18 @@ export function SettingsPage() {
                 }
               >
                 Bloqueos CSV
+              </button>
+              <button
+                className="btn btn-secondary"
+                onClick={() =>
+                  downloadFile(
+                    "bitacora-prioridades.csv",
+                    priorityLogCsv(db),
+                    "text/csv;charset=utf-8",
+                  )
+                }
+              >
+                Bitácora de prioridades CSV
               </button>
             </div>
           </div>

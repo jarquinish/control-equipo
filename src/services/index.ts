@@ -8,6 +8,7 @@ import { commitmentService } from './commitmentService';
 import { createContext, type ServiceContext } from './context';
 import { importService } from './importService';
 import { peopleService } from './peopleService';
+import { priorityService } from './priorityService';
 import { projectService } from './projectService';
 import { sessionService } from './sessionService';
 import { settingsService } from './settingsService';
@@ -19,6 +20,7 @@ export function createServices(store: DataStore, now: () => Date = () => new Dat
   const projects = projectService(ctx);
   const blocks = blockService(ctx);
   const commitments = commitmentService(ctx);
+  const priority = priorityService(ctx);
   return {
     ctx,
     settings: settingsService(ctx),
@@ -27,7 +29,8 @@ export function createServices(store: DataStore, now: () => Date = () => new Dat
     projects,
     blocks,
     commitments,
-    imports: importService(ctx, { people, projects, blocks, commitments }),
+    imports: importService(ctx, { people, projects, blocks, commitments, priority }),
+    priority,
     weeks: weekService(ctx),
     sessions: sessionService(ctx),
     backup: backupService(ctx),
@@ -44,7 +47,7 @@ export function bootstrapEmpty(services: Services): void {
   const { ctx } = services;
   ctx.store.batch(() => {
     if (!ctx.repos.settings.read('settings')) {
-      ctx.repos.settings.create({ ...defaultSettings(), schemaVersion: SCHEMA_VERSION, updatedAt: ctx.nowIso() });
+      ctx.repos.settings.create({ ...defaultSettings(), schemaVersion: SCHEMA_VERSION, priorityModel: 2, updatedAt: ctx.nowIso() });
     }
     if (!ctx.repos.people.list().length) {
       const director = services.people.create({ nombre: 'Dirección de Posicionamiento', rol: 'DIRECTOR' });

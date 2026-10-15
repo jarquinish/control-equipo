@@ -62,7 +62,7 @@ $$;
 create table if not exists public.au_records (
   collection text not null check (collection in (
     'areas', 'people', 'projects', 'weeks', 'weeklyUpdates', 'areaUpdates',
-    'blocks', 'commitments', 'sessions', 'decisions', 'snapshots', 'settings'
+    'blocks', 'commitments', 'sessions', 'decisions', 'snapshots', 'settings', 'priorityLog'
   )),
   id         text not null,
   data       jsonb not null,
@@ -175,7 +175,7 @@ begin
   ) as item
   where c.key in (
     'areas', 'people', 'projects', 'weeks', 'weeklyUpdates', 'areaUpdates',
-    'blocks', 'commitments', 'sessions', 'decisions', 'snapshots', 'settings'
+    'blocks', 'commitments', 'sessions', 'decisions', 'snapshots', 'settings', 'priorityLog'
   );
 
   get diagnostics total = row_count;
@@ -232,7 +232,19 @@ select
   (r.data ->> 'bloqueado')::boolean       as bloqueado,
   r.data ->> 'fechaObjetivo'              as fecha_objetivo,
   r.updated_at,
-  r.updated_by
+  r.updated_by,
+  r.data -> 'clasif' ->> 'estrategica'          as prioridad_estrategica,
+  r.data -> 'clasif' ->> 'operativa'            as prioridad_operativa,
+  r.data -> 'clasif' ->> 'integrada'            as clasificacion,
+  r.data -> 'clasif' ->> 'fuenteEstrategica'    as fuente_estrategica,
+  r.data -> 'clasif' ->> 'fuenteOperativa'      as fuente_operativa,
+  r.data -> 'clasif' ->> 'motivoEstrategica'    as motivo_estrategica,
+  r.data -> 'clasif' ->> 'motivoOperativa'      as motivo_operativa,
+  r.data ->> 'solicitante'                      as solicitante,
+  r.data ->> 'frente'                           as frente,
+  coalesce((r.data -> 'acuerdo' ->> 'bloqueado')::boolean, false) as acuerdo_cerrado,
+  r.data ->> 'notaRevalidar'                    as nota_revalidar,
+  r.data ->> 'ref'                              as ref
 from public.au_records r
 left join public.au_records a on a.collection = 'areas'  and a.id = r.data ->> 'areaId'
 left join public.au_records p on p.collection = 'people' and p.id = r.data ->> 'responsable'

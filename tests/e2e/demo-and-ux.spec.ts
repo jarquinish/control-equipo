@@ -22,11 +22,30 @@ test('demo: dashboard, KPIs clicables, alertas, búsqueda y aislamiento', async 
   const first = page.locator('.attention-item').first();
   await expect(first).toContainText(/Compromiso venció/);
 
-  // KPI clicable: P1 filtra proyectos
-  const p1Value = await page.locator('.kpi', { hasText: /^P1/ }).locator('.kpi-value').innerText();
-  await page.locator('.kpi', { hasText: /^P1/ }).click();
-  await expect(page).toHaveURL(/prioridad=P1/);
+  // KPI clicable: P1 filtra proyectos (todos los P1: Crítico, Urgente y Estratégico)
+  const p1Kpi = page.locator('.kpi').filter({ has: page.locator('.kpi-label', { hasText: /^P1$/ }) });
+  const p1Value = await p1Kpi.locator('.kpi-value').innerText();
+  await p1Kpi.click();
+  await expect(page).toHaveURL(/clasif=P1/);
   await expect(page.getByTestId('project-row')).toHaveCount(Number(p1Value));
+  for (const c of await page.getByTestId('project-row').evaluateAll((rows) => rows.map((r) => r.getAttribute('data-clasif')))) expect(c).toMatch(/^P1/);
+
+  // P1 Crítico resaltado y carga por gerencia
+  await page.goto('/');
+  const critKpi = page.locator('.kpi').filter({ has: page.locator('.kpi-label', { hasText: 'P1 Crítico' }) });
+  const crit = Number(await critKpi.locator('.kpi-value').innerText());
+  expect(crit).toBeGreaterThan(0);
+  await expect(page.getByTestId('carga-gerencia')).toContainText('SOC Store');
+  await critKpi.click();
+  await expect(page).toHaveURL(/clasif=P1C/);
+  await expect(page.locator('tr.row-critico[data-testid="project-row"]')).toHaveCount(crit);
+
+  // Filtros por eje y explicación de la prioridad
+  await page.goto('/proyectos?est=P1');
+  for (const c of await page.getByTestId('project-row').evaluateAll((rows) => rows.map((r) => r.getAttribute('data-clasif')))) expect(['P1C', 'P1E']).toContain(c);
+  await page.getByTestId('project-row').first().click();
+  await expect(page.getByTestId('why-priority')).toContainText('Orden de atención #');
+  await expect(page.getByTestId('why-estrategica')).toContainText('Fuente:');
 
   // KPI vencidos → compromisos filtrados por estado vencido
   await page.goto('/');

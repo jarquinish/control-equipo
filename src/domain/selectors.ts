@@ -7,6 +7,7 @@ import {
 } from './constants';
 import { deadline, hoursUntil, isSameDay, isValidDate, isValidTime, parseDate } from './dates';
 import { PRIORITY_RANK } from './scoring';
+import { DEFAULT_MATRIX, NIVEL_POR_CLASIFICACION } from './priority';
 import type {
   AreaUpdate,
   Block,
@@ -29,6 +30,7 @@ export function defaultSettings(): Settings {
     statusLabels: { ...DEFAULT_STATUS_LABELS },
     criteria: { ...DEFAULT_CRITERIA },
     orgName: 'Dirección de Posicionamiento · SOC',
+    priorityMatrix: structuredClone(DEFAULT_MATRIX),
     schemaVersion: SCHEMA_VERSION,
     updatedAt: new Date(0).toISOString(),
   };
@@ -43,6 +45,7 @@ export function getSettings(db: DbData): Settings {
     ...s,
     criteria: { ...d.criteria, ...s.criteria },
     statusLabels: { ...d.statusLabels, ...s.statusLabels },
+    priorityMatrix: s.priorityMatrix ?? d.priorityMatrix,
   };
 }
 
@@ -156,7 +159,9 @@ export function isActiveProject(p: Project): boolean {
 }
 
 export function sortProjectsByPriority(a: Project, b: Project): number {
+  const nivel = (p: Project) => (p.clasif ? NIVEL_POR_CLASIFICACION[p.clasif.integrada] : PRIORITY_RANK[p.prioridadFinal] * 2);
   return (
+    nivel(a) - nivel(b) ||
     PRIORITY_RANK[a.prioridadFinal] - PRIORITY_RANK[b.prioridadFinal] ||
     b.score - a.score ||
     Number(b.bloqueado) - Number(a.bloqueado) ||
@@ -212,6 +217,9 @@ export function updateFromProject(
     prioridad: p.prioridadFinal,
     prioridadCalculada: p.prioridadCalculada,
     ajusteDireccion: p.ajusteDireccion,
+    prioridadEstrategica: p.clasif?.estrategica,
+    prioridadOperativa: p.clasif?.operativa,
+    clasificacion: p.clasif?.integrada,
     eisenhower: p.eisenhower,
     bloqueado: p.bloqueado,
     fechaObjetivo: p.fechaObjetivo,

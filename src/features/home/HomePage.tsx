@@ -16,15 +16,18 @@ import {
 import { ALERT_LABELS, attentionItems, computeAlerts, type Alert } from '../../domain/alerts';
 import { fmtDate, fmtDateTime, fmtShort } from '../../domain/dates';
 import { computeKpis } from '../../domain/metrics';
-import { areaUpdateFor, dependencyLabel } from '../../domain/selectors';
+import { cargaPorArea, CLASIFICACION_LABELS, CLASIFICACIONES } from '../../domain/priority';
+import { areaUpdateFor, dependencyLabel, isActiveProject } from '../../domain/selectors';
 import { RULES } from '../../domain/constants';
 import { useApp, useCurrentUser, useDb, useServices, useSettings, useWeekData } from '../../state/app';
 import { Link, navigate } from '../../state/router';
 import { demoEnabled } from '../../state/workspace';
-import { AreaDot, BlockedChip, Chip, PriorityBadge } from '../../ui/badges';
+import { AreaDot, BlockedChip, Chip, ClassBadge, PriorityBadge } from '../../ui/badges';
 import { EmptyState, KpiCard, Section } from '../../ui/common';
 import { useFeedback } from '../../ui/feedback';
 import { useModals } from '../modals/ModalHost';
+
+const CARGA_CORTO = { P1C: 'Crít.', P1U: 'Urg.', P1E: 'Estr.', P2: 'P2', P3: 'P3' } as const;
 
 const SEVERITY_ICON = {
   critical: <AlertOctagon size={15} aria-hidden />,
@@ -46,7 +49,11 @@ export function HomePage() {
   const kpis = useMemo(() => (data ? (data.snapshot?.kpis ?? computeKpis(data, ref, db.commitments)) : null), [db, data, ref]);
   const alerts = useMemo(() => (data ? computeAlerts(db, data, ref) : []), [db, data, ref]);
   const items = useMemo(() => (data ? attentionItems(data, alerts) : []), [data, alerts]);
+  const carga = useMemo(() => (data ? cargaPorArea(data.projects.filter(isActiveProject)) : new Map()), [data]);
   if (!data || !kpis) return null;
+  const criticos = data.projects.filter((p) => isActiveProject(p) && p.clasif?.integrada === 'P1C').length;
+  const { maxP1UrgentesPorArea: maxU, maxP1EstrategicosPorArea: maxE } = settings.criteria;
+  const areasExcedidas = [...carga.entries()].filter(([, c]) => c.P1C + c.P1U > maxU || c.P1E > maxE).length;
 
   const session = services.sessions.forWeek(data.week.id);
   const areas = [...db.areas].filter((a) => a.activo).sort((a, b) => a.orden - b.orden);
@@ -162,9 +169,16 @@ export function HomePage() {
         </Section>
       ) : (
         <>
-          <section className="kpis" aria-label="Indicadores de la semana">
+          <section className="kpis kpis-9" aria-label="Indicadores de la semana">
             <KpiCard label="Proyectos activos" value={kpis.proyectosActivos} to="/proyectos" tone="brand" />
-            <KpiCard label="P1" value={kpis.p1} to="/proyectos?prioridad=P1" hint={kpis.p1 > settings.criteria.maxP1 ? `Máx. recomendado ${settings.criteria.maxP1}` : undefined} tone={kpis.p1 > settings.criteria.maxP1 ? 'yellow' : 'default'} />
+            <KpiCard label="P1 Crítico" value={criticos} to="/proyectos?clasif=P1C" tone={criticos ? 'red' : 'default'} hint="Estratégico y urgente a la vez" />
+            <KpiCard
+              label="P1"
+              value={kpis.p1}
+              to="/proyectos?clasif=P1"
+              hint={areasExcedidas ? `${areasExcedidas} gerencia(s) sobre el límite` : `Máx. por gerencia: ${maxU} urgentes · ${maxE} estratégicos`}
+              tone={areasExcedidas ? 'yellow' : 'default'}
+            />
             <KpiCard label="P2" value={kpis.p2} to="/proyectos?prioridad=P2" />
             <KpiCard label="P3" value={kpis.p3} to="/proyectos?prioridad=P3" />
             <KpiCard label="Bloqueados" value={kpis.bloqueados} to="/bloqueos" tone={kpis.bloqueados ? 'red' : 'green'} />
@@ -188,7 +202,7 @@ export function HomePage() {
                         <div className="attention-main">
                           <div className="attention-title">
                             <strong>{it.project.nombre}</strong>
-                            <PriorityBadge p={it.project.prioridadFinal} override={it.project.ajusteDireccion} />
+                            {it.project.clasif ? <ClassBadge c={it.project.clasif.integrada} /> : <PriorityBadge p={it.project.prioridadFinal} override={it.project.ajusteDireccion} />}
                             {it.project.bloqueado && <BlockedChip />}
                           </div>
                           <div className="attention-meta">
@@ -252,6 +266,46 @@ export function HomePage() {
                 </dl>
                 <p className="small muted">Indicadores del sistema, no de personas: sirven para detectar dónde se atora el trabajo.</p>
               </Section>
+              <Section title="Carga por gerencia" id="carga" actions={<Link to="/proyectos?clasif=P1" className="small">Ver P1 →</Link>}>
+                <div className="table-wrap">
+                  <table className="table table-compact carga-table" data-testid="carga-gerencia">
+                    <thead>
+                      <tr>
+                        <th scope="col">Gerencia</th>
+                        {CLASIFICACIONES.map((c) => (
+                          <th key={c} scope="col" className="num" title={CLASIFICACION_LABELS[c]}>
+                            <span className={`cls cls-${c.toLowerCase()}`} aria-label={CLASIFICACION_LABELS[c]}>
+                              {CARGA_CORTO[c]}
+                            </span>
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {areas.map((a) => {
+                        const c = carga.get(a.id) ?? { P1C: 0, P1U: 0, P1E: 0, P2: 0, P3: 0 };
+                        const overU = c.P1C + c.P1U > maxU;
+                        const overE = c.P1E > maxE;
+                        return (
+                          <tr key={a.id}>
+                            <td>
+                              <AreaDot color={a.color} name={a.nombre} />
+                            </td>
+                            {CLASIFICACIONES.map((k) => (
+                              <td key={k} className={`num ${(overU && (k === 'P1C' || k === 'P1U')) || (overE && k === 'P1E') ? 'carga-over' : ''}`}>
+                                <Link to={`/proyectos?area=${a.id}&clasif=${k}`}>{c[k]}</Link>
+                              </td>
+                            ))}
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                <p className="small muted">
+                  Límite por gerencia: {maxU} P1 Críticos + Urgentes y {maxE} P1 Estratégicos. En rojo, lo que excede: Dirección decide qué se desplaza.
+                </p>
+              </Section>
               <OtherAlerts alerts={alerts} />
               <Section title="Reglas del juego" className="rules">
                 <ol>
@@ -278,7 +332,9 @@ function OtherAlerts({ alerts }: { alerts: Alert[] }) {
   for (const a of alerts) counts.set(a.kind, (counts.get(a.kind) ?? 0) + 1);
   const rows = [
     ['bloqueo_sin_compromiso', '/bloqueos'],
-    ['p1_sin_responsable', '/proyectos?prioridad=P1'],
+    ['p1_sin_responsable', '/proyectos?clasif=P1'],
+    ['p1e_desatendido', '/proyectos?clasif=P1E'],
+    ['p1_limite_area', '/proyectos?clasif=P1'],
     ['area_sin_actualizar', '/areas'],
     ['escalado', '/bloqueos'],
   ] as const;
@@ -290,7 +346,7 @@ function OtherAlerts({ alerts }: { alerts: Alert[] }) {
         {visible.map(([k, to]) => (
           <li key={k}>
             <Link to={to}>
-              <Chip tone={k === 'area_sin_actualizar' ? 'yellow' : k === 'escalado' ? 'pink' : 'red'} icon={<AlertTriangle size={14} aria-hidden />}>
+              <Chip tone={k === 'area_sin_actualizar' || k === 'p1_limite_area' ? 'yellow' : k === 'escalado' ? 'pink' : 'red'} icon={<AlertTriangle size={14} aria-hidden />}>
                 {counts.get(k)}
               </Chip>
               {ALERT_LABELS[k]}

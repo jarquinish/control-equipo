@@ -160,44 +160,6 @@ export function sessionService(ctx: ServiceContext) {
       });
     },
 
-    /**
-     * Regla 8: una nueva prioridad crítica desplaza otra. El proyecto desplazado
-     * baja a P2 por ajuste de Dirección y queda registrada la decisión.
-     */
-    displace(id: string | undefined, promovidoId: string, desplazadoId: string) {
-      const promovido = ctx.repos.projects.read(promovidoId);
-      const desplazado = ctx.repos.projects.read(desplazadoId);
-      if (!promovido || !desplazado) throw new ValidationError({ proyecto: 'Proyecto no encontrado.' });
-      return ctx.store.batch(() => {
-        const at = ctx.nowIso();
-        const calc = desplazado.prioridadCalculada;
-        const ajuste = calc !== 'P2';
-        const next = ctx.repos.projects.update(desplazadoId, {
-          prioridadFinal: 'P2',
-          ajusteDireccion: ajuste,
-          motivoAjuste: ajuste ? `Desplazado por «${promovido.nombre}»` : undefined,
-          updatedAt: at,
-          updatedBy: ctx.userId(),
-        });
-        recordWeeklyUpdate(ctx, next, { origen: 'junta' });
-        const week = ctx.activeWeek()!;
-        decisions.create({
-          id: newId('dec'),
-          sessionId: id,
-          weekId: week.id,
-          projectId: promovidoId,
-          descripcion: `«${promovido.nombre}» pasa a P1 y desplaza a «${desplazado.nombre}» (P2).`,
-          responsable: ctx.userId(),
-          createdAt: at,
-        });
-        if (id) {
-          const s = get(id);
-          patch(id, { desplazamientos: [...s.desplazamientos, { promovido: promovidoId, desplazado: desplazadoId, fecha: at }] });
-        }
-        return next;
-      });
-    },
-
     /** Genera el resumen ejecutivo de la semana (sin cerrarla). */
     summary(weekId?: string): SummaryOutput | undefined {
       const data = getWeekData(ctx.store.getState(), weekId ?? ctx.activeWeek()?.id, ctx.now());

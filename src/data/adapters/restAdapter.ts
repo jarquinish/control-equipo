@@ -25,6 +25,7 @@ export const REST_RESOURCES: Record<CollectionName, string> = {
   decisions: 'decisions',
   snapshots: 'snapshots',
   settings: 'settings',
+  priorityLog: 'priority-log',
 };
 
 export interface RestAdapterOptions {

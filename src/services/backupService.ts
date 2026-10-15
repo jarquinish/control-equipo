@@ -30,6 +30,7 @@ const LABELS: Record<CollectionName, string> = {
   decisions: 'decisiones',
   snapshots: 'snapshots históricos',
   settings: 'configuración',
+  priorityLog: 'bitácora de prioridades',
 };
 export const COLLECTION_LABELS = LABELS;
 

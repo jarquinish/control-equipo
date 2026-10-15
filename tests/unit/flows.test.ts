@@ -34,19 +34,23 @@ describe('proyectos', () => {
     expect(() => svc.projects.create({ nombre: 'X', areaId: areas['Diseño'], impacto: 1, urgencia: 1, dependencia: 1, fechaObjetivo: '2026-13-01' })).toThrow(ValidationError);
   });
 
-  it('edita y recalcula; el override de Dirección se conserva', async () => {
+  it('edita y recalcula; lo establecido por Dirección se conserva', async () => {
     const { svc, areas } = await setup();
     const p = svc.projects.create({ nombre: 'Landing', areaId: areas['Marketing Digital'], impacto: 3, urgencia: 2, dependencia: 1 });
+    expect(p.clasif).toMatchObject({ estrategica: 'P2', operativa: 'P3', integrada: 'P2' });
     expect(p.prioridadFinal).toBe('P2');
-    const up = svc.projects.update(p.id, { urgencia: 3, dependencia: 2 });
-    expect(up.score).toBe(8);
+    const up = svc.projects.update(p.id, { urgencia: 3, dependencia: 3, fechaObjetivo: '2026-10-08' });
+    expect(up.score).toBe(9);
+    expect(up.clasif).toMatchObject({ operativa: 'P1', integrada: 'P1U' }); // 3 + 3 + fecha en 3 días (+2) = 8
     expect(up.prioridadFinal).toBe('P1');
-    const ov = svc.projects.setOverride(p.id, 'P2', 'Arranca después');
+    const ov = svc.priority.setDirective(p.id, 'operativa', 'P2', 'Arranca después');
     expect(ov).toMatchObject({ prioridadCalculada: 'P1', prioridadFinal: 'P2', ajusteDireccion: true, motivoAjuste: 'Arranca después' });
-    const again = svc.projects.update(p.id, { impacto: 2 }); // score 7 → P2 calculada = override
-    expect(again).toMatchObject({ prioridadCalculada: 'P2', prioridadFinal: 'P2', ajusteDireccion: false });
-    const back = svc.projects.setOverride(p.id, null);
+    const again = svc.projects.update(p.id, { urgencia: 1 }); // Dirección prevalece sobre el cálculo
+    expect(again.clasif).toMatchObject({ operativa: 'P2', fuenteOperativa: 'direccion' });
+    expect(() => svc.priority.setDirective(p.id, 'operativa', null, '')).toThrow(ValidationError);
+    const back = svc.priority.setDirective(p.id, 'operativa', null, 'Se libera');
     expect(back.ajusteDireccion).toBe(false);
+    expect(back.clasif?.fuenteOperativa).toBe('criterios');
   });
 
   it('cambia el cuadrante Eisenhower', async () => {
@@ -121,7 +125,7 @@ describe('Weekly completa y continuidad semanal', () => {
     // Las cuatro áreas actualizan
     const p1 = svc.projects.create({ nombre: 'Campaña Convención', areaId: areas['Marketing Digital'], responsable: beto.id, impacto: 3, urgencia: 3, dependencia: 3 });
     const p2 = svc.projects.create({ nombre: 'KV Convención', areaId: areas['Diseño'], responsable: ana.id, impacto: 3, urgencia: 3, dependencia: 2 });
-    const p3 = svc.projects.create({ nombre: 'SOC TV', areaId: areas['Contenido'], impacto: 3, urgencia: 1, dependencia: 2 });
+    const p3 = svc.projects.create({ nombre: 'SOC TV', areaId: areas['Contenido'], responsable: ana.id, impacto: 3, urgencia: 1, dependencia: 2 });
     const p4 = svc.projects.create({ nombre: 'Catálogo', areaId: areas['SOC Store'], impacto: 1, urgencia: 2, dependencia: 1 });
     for (const id of Object.values(areas)) svc.areas.completeUpdate(id);
 
@@ -132,7 +136,8 @@ describe('Weekly completa y continuidad semanal', () => {
     svc.projects.setQuadrant(p3.id, 'planificar', { origen: 'junta' });
     svc.projects.update(p4.id, { urgencia: 1 }, { origen: 'junta' });
     const data = getWeekData(store.getState(), w1.id, clock.now)!;
-    expect(detectQueue(data, clock.now).map((p) => p.id).slice(0, 2)).toEqual([p1.id, p2.id]);
+    // SOC TV es P1 Crítico en Contenido (matriz estratégica y de urgencias): va primero.
+    expect(detectQueue(data, clock.now).map((p) => p.id).slice(0, 3)).toEqual([p3.id, p1.id, p2.id]);
 
     const b = svc.blocks.create({ projectId: p1.id, descripcion: 'Comercial no confirma presupuesto', areaDependencia: 'ext:Comercial', responsableGestion: beto.id }, 'junta');
     svc.sessions.detect(s.id, p1.id, 'bloqueado');
@@ -154,7 +159,7 @@ describe('Weekly completa y continuidad semanal', () => {
 
     const { snapshot } = svc.sessions.close(s.id);
     expect(store.get('weeks', w1.id)!.estado).toBe('cerrada');
-    expect(snapshot.kpis).toMatchObject({ p1: 2, bloqueados: 1, compromisosAbiertos: 3 });
+    expect(snapshot.kpis).toMatchObject({ p1: 3, bloqueados: 1, compromisosAbiertos: 3 }); // SOC TV (Crítico), dos Convención (Urgente)
     expect(() => svc.sessions.start()).toThrow(/cerrada/);
     const backup = svc.backup.exportBackup('test');
     const historyBefore = JSON.stringify(getWeekData(store.getState(), w1.id, clock.now));
@@ -184,8 +189,12 @@ describe('Weekly completa y continuidad semanal', () => {
 
     // Evolución del proyecto sin duplicarlo
     expect(store.getState().projects.filter((p) => p.nombre === 'KV Convención')).toHaveLength(1);
-    const evo = store.getState().weeklyUpdates.filter((u) => u.projectId === p2.id).map((u) => [u.weekId, u.prioridad]);
-    expect(evo).toEqual([[w1.id, 'P1'], [w2.id, 'P2']]);
+    const evo = store.getState().weeklyUpdates.filter((u) => u.projectId === p2.id).map((u) => [u.weekId, u.prioridad, u.score, u.clasificacion]);
+    // Convención está en la matriz de urgencias de Diseño: bajar la urgencia no la degrada.
+    expect(evo).toEqual([
+      [w1.id, 'P1', 8, 'P1U'],
+      [w2.id, 'P1', 7, 'P1U'],
+    ]);
 
     svc.sessions.addDecision(s2.id, { descripcion: 'Buen Fin entra como P2' });
     svc.sessions.close(s2.id);
@@ -204,14 +213,17 @@ describe('Weekly completa y continuidad semanal', () => {
 
   it('regla 8: un nuevo P1 desplaza a otro y queda la decisión', async () => {
     const { svc, store, areas } = await setup();
-    const a = svc.projects.create({ nombre: 'A', areaId: areas['Diseño'], impacto: 3, urgencia: 3, dependencia: 3 });
+    const a = svc.projects.create({ nombre: 'A', areaId: areas['Diseño'], impacto: 3, urgencia: 3, dependencia: 3, fechaObjetivo: '2026-10-07' });
     const b = svc.projects.create({ nombre: 'B', areaId: areas['Diseño'], impacto: 2, urgencia: 2, dependencia: 2 });
+    expect(a.clasif?.operativa).toBe('P1');
     const s = svc.sessions.start();
-    svc.projects.setOverride(b.id, 'P1', 'Urgencia comercial');
-    svc.sessions.displace(s.id, b.id, a.id);
+    svc.priority.setDirective(b.id, 'operativa', 'P1', 'Urgencia comercial', 'junta');
+    svc.priority.displace(b.id, a.id, 'operativa', s.id);
     expect(svc.projects.get(a.id)).toMatchObject({ prioridadFinal: 'P2', ajusteDireccion: true });
+    expect(svc.projects.get(a.id).clasif?.motivoOperativa).toContain('Desplazado por «B»');
     expect(store.getState().decisions[0].descripcion).toContain('desplaza');
     expect(svc.sessions.get(s.id).desplazamientos).toHaveLength(1);
+    expect(store.getState().priorityLog.filter((l) => l.projectId === a.id)).toHaveLength(1);
   });
 });
 
