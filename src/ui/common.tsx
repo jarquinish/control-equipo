@@ -87,8 +87,23 @@ export function Question({ children }: { children: ReactNode }) {
 }
 
 /** Descarga un archivo generado en el navegador. */
-export function downloadFile(name: string, content: string | Uint8Array, type = 'text/plain;charset=utf-8') {
+type ClaudeDownloads = { save: (r: { filename: string; data: Blob }) => Promise<unknown> };
+type ClaudeWindow = Window & { claude?: { use?: (name: 'downloads') => Promise<ClaudeDownloads | null> } };
+
+/**
+ * Descarga un archivo generado. Dentro de una página publicada en claude.ai las
+ * descargas pasan por la confirmación del visor; en cualquier otro lugar, enlace normal.
+ */
+export async function downloadFile(name: string, content: string | Uint8Array, type = 'text/plain;charset=utf-8') {
   const blob = new Blob([content as BlobPart], { type });
+  const host = (window as ClaudeWindow).claude;
+  if (host?.use) {
+    const downloads = await host.use('downloads').catch(() => null);
+    if (downloads) {
+      await downloads.save({ filename: name, data: blob }).catch(() => undefined);
+      return;
+    }
+  }
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
