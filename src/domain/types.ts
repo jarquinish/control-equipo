@@ -18,7 +18,7 @@ export type Time = string;
 export type Level = 1 | 2 | 3;
 export type Priority = 'P1' | 'P2' | 'P3';
 export type Quadrant = 'hacer' | 'planificar' | 'delegar' | 'eliminar';
-export type Role = 'ADMIN' | 'DIRECTOR' | 'GERENTE' | 'COLABORADOR';
+export type Role = 'ADMIN' | 'DIRECTOR' | 'GERENTE' | 'COLABORADOR' | 'CONSULTA';
 
 export type ProjectStatus = 'por_iniciar' | 'en_curso' | 'en_riesgo' | 'en_pausa' | 'completado' | 'archivado';
 export type WeekStatus = 'abierta' | 'cerrada';

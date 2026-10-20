@@ -1,13 +1,13 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { DataStore } from '../data/store';
 import { toISODate } from '../domain/dates';
-import { can } from '../domain/permissions';
+import { can, canEditAnything } from '../domain/permissions';
 import { attentionOrder, type Attention } from '../domain/priority';
 import { getActiveWeek, getSettings, getWeekData, isActiveProject, liveSelection, type WeekData } from '../domain/selectors';
 import type { DbData, Person, Settings } from '../domain/types';
 import { bootstrapEmpty, createServices, type Services } from '../services';
 import { buildDemoData } from '../services/demoService';
-import { ensureIdentity } from '../services/identityService';
+import { ensureIdentity, findIdentity } from '../services/identityService';
 import { RemoteError } from '../data/adapters/supabaseAdapter';
 import { useFeedback } from '../ui/feedback';
 import { useAuth, type AuthInfo } from './auth';
@@ -36,7 +36,8 @@ class NotInitializedError extends Error {}
 function syncPriorities(services: Services): void {
   const { ctx } = services;
   const id = ctx.userId();
-  const user = id ? ctx.repos.people.read(id) : undefined;
+  const person = id ? ctx.repos.people.read(id) : undefined;
+  const user = ctx.store.role ? { rol: ctx.store.role } : person;
   if (!can(user, 'project.edit')) return;
   try {
     services.priority.migrateLegacy();
@@ -71,7 +72,12 @@ async function openStore(ws: Workspace, auth: AuthInfo | null): Promise<{ store:
     services.weeks.ensureCurrentWeek();
   }
   if (remote) {
-    store.identity = ensureIdentity(services, { email: remote.email, name: remote.name, rol: remote.member.rol, personId: remote.member.person_id }, !hadData);
+    store.role = remote.member.rol;
+    // Sólo consulta: no escribe nada (ni siquiera su ficha en el directorio).
+    store.identity =
+      remote.member.rol === 'CONSULTA'
+        ? findIdentity(services, { email: remote.email, personId: remote.member.person_id })
+        : ensureIdentity(services, { email: remote.email, name: remote.name, rol: remote.member.rol, personId: remote.member.person_id }, !hadData);
   }
   syncPriorities(services);
   await store.flush();
@@ -256,9 +262,18 @@ export function useSettings(): Settings {
 export function useCurrentUser(): Person | undefined {
   const db = useDb();
   const s = useSettings();
-  const { store } = useApp();
+  const { store, auth } = useApp();
   const id = store.identity ?? s.currentUserId;
-  return db.people.find((p) => p.id === id);
+  const person = db.people.find((p) => p.id === id);
+  if (!store.role) return person;
+  // Multiusuario: el rol del acceso manda. Un acceso de consulta puede no tener ficha en el directorio.
+  if (person) return person.rol === store.role ? person : { ...person, rol: store.role };
+  return { id: '', nombre: auth?.name || auth?.email || 'Consulta', email: auth?.email, rol: store.role, activo: true } as Person;
+}
+
+/** ¿El usuario puede modificar algo? (un acceso de sólo consulta, no). */
+export function useCanEdit(): boolean {
+  return canEditAnything(useCurrentUser());
 }
 
 /** Datos de la semana que se está viendo (viva o histórica). */
@@ -291,11 +306,14 @@ export function useOpsData() {
   const db = useDb();
   const data = useWeekData();
   const active = useActiveWeek();
+  const canEdit = useCanEdit();
   return useMemo(() => {
     if (!data) return undefined;
-    const manageable = !!active && data.week.id === active.id;
-    if (!manageable || data.live) return { ...data, manageable };
+    const current = !!active && data.week.id === active.id;
+    // Un acceso de sólo consulta ve lo mismo, pero sin acciones.
+    const manageable = current && canEdit;
+    if (!current || data.live) return { ...data, manageable };
     const live = liveSelection(db, data.week);
     return { ...data, blocks: live.blocks, commitments: live.commitments, asOf: new Date(), manageable };
-  }, [db, data, active]);
+  }, [db, data, active, canEdit]);
 }

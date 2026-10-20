@@ -34,3 +34,10 @@ export function ensureIdentity(services: Services, who: IdentityInput, justBoots
   }
   return person.id;
 }
+
+/** Igual que ensureIdentity pero sin escribir (acceso de sólo consulta): devuelve la persona si existe. */
+export function findIdentity(services: Services, who: Pick<IdentityInput, 'email' | 'personId'>): string | undefined {
+  const email = who.email.toLowerCase();
+  const people = services.ctx.repos.people.list();
+  return ((who.personId ? people.find((p) => p.id === who.personId) : undefined) ?? people.find((p) => p.email?.toLowerCase() === email))?.id;
+}

@@ -8,6 +8,8 @@ async function login(page: Page, email: string, code = '123456') {
   await page.getByRole('button', { name: 'Enviarme un código de acceso' }).click();
   await page.getByLabel('Código').fill(code);
   await page.getByRole('button', { name: 'Entrar' }).click();
+  // Espera a que termine el inicio de sesión antes de navegar (si no, se cancela la verificación).
+  if (code === '123456') await expect(page.getByRole('heading', { name: 'Iniciar sesión' })).toHaveCount(0);
 }
 
 test('multiusuario: acceso, roles, datos compartidos y sesión', async ({ browser }) => {
@@ -98,6 +100,98 @@ test('multiusuario: acceso, roles, datos compartidos y sesión', async ({ browse
   await login(admin, 'admin@soc.test');
   await admin.goto('/proyectos');
   await expect(admin.getByTestId('project-row')).toHaveCount(1);
+
+  expect(errors).toEqual([]);
+});
+
+test('sólo consulta: alta con código, contraseña propia y sin botones de edición', async ({ browser }) => {
+  const errors: string[] = [];
+  const admin = await (await browser.newContext()).newPage();
+  admin.on('pageerror', (e) => errors.push(e.message));
+  await login(admin, 'admin@soc.test');
+  await expect(admin.getByTestId('week-label')).toBeVisible();
+
+  // Dirección da acceso de consulta y genera el código de alta
+  await admin.goto('/configuracion');
+  await admin.getByLabel('Correo para dar acceso').fill('lector@soc.test');
+  await admin.getByLabel('Rol del nuevo acceso').selectOption('CONSULTA');
+  await admin.getByRole('button', { name: 'Dar acceso' }).click();
+  await expect(admin.getByTestId('issued-code')).toContainText('lector@soc.test');
+  const code = (await admin.getByTestId('issued-code').locator('.alta-code').textContent())!.trim();
+  expect(code).toMatch(/^[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}$/);
+  await expect(admin.getByTestId('member-row').filter({ hasText: 'lector@soc.test' }).getByTestId('alta-pending')).toBeVisible();
+
+  // La persona crea su contraseña (primero con un código equivocado)
+  const ctxL = await browser.newContext();
+  const lector = await ctxL.newPage();
+  lector.on('pageerror', (e) => errors.push(e.message));
+  await lector.goto('/');
+  await lector.getByRole('button', { name: 'Primera vez: crear mi contraseña' }).click();
+  await lector.getByLabel('Correo').fill('Lector@SOC.test');
+  await lector.getByLabel('Código de alta').fill('AAAA-BBBB-CCCC');
+  await lector.getByLabel('Nueva contraseña').fill('MiClave-2026');
+  await lector.getByLabel('Confirmar contraseña').fill('MiClave-2026');
+  await lector.getByRole('button', { name: 'Crear contraseña y entrar' }).click();
+  await expect(lector.getByRole('alert')).toContainText('El código no corresponde');
+  await lector.getByLabel('Código de alta').fill(code.toLowerCase().replace(/-/g, ' '));
+  await lector.getByRole('button', { name: 'Crear contraseña y entrar' }).click();
+
+  // Ve las prioridades sin poder modificar
+  await expect(lector.getByTestId('week-label')).toBeVisible();
+  await expect(lector.locator('.user-name')).toContainText('Consulta (sólo lectura)');
+  await lector.goto('/proyectos');
+  await expect(lector.getByTestId('project-row')).toHaveCount(1);
+  await expect(lector.getByRole('button', { name: 'Nuevo proyecto' })).toHaveCount(0);
+  await lector.getByTestId('project-row').first().click();
+  await expect(lector.getByTestId('why-priority')).toBeVisible();
+  await expect(lector.getByRole('button', { name: 'Actualizar', exact: true })).toHaveCount(0);
+  await lector.goto('/compromisos');
+  await expect(lector.getByRole('button', { name: 'Nuevo compromiso' })).toHaveCount(0);
+  await lector.goto('/weekly');
+  await expect(lector.getByTestId('weekly-readonly')).toBeVisible();
+
+  // El servidor también rechaza escrituras con su sesión
+  const denied = await lector.evaluate(async () => {
+    const key = Object.keys(localStorage).find((k) => k.endsWith('-auth-token'))!;
+    const token = JSON.parse(localStorage.getItem(key)!).access_token as string;
+    const r = await fetch('http://localhost:54321/rest/v1/au_records', {
+      method: 'POST',
+      headers: { apikey: token, authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ collection: 'projects', id: 'x-consulta', data: {} }),
+    });
+    return r.status;
+  });
+  expect([401, 403]).toContain(denied);
+
+  // Sale y vuelve a entrar con la contraseña que creó
+  await lector.getByRole('button', { name: 'Salir' }).click();
+  await lector.getByLabel('Correo').fill('lector@soc.test');
+  await lector.getByLabel('Contraseña').fill('MiClave-2026');
+  await lector.getByRole('button', { name: 'Entrar' }).click();
+  await expect(lector.locator('.user-name')).toContainText('Consulta (sólo lectura)');
+
+  // Dirección ve el alta completada
+  await admin.reload();
+  await expect(admin.getByTestId('member-row').filter({ hasText: 'lector@soc.test' })).toContainText('Creada');
+
+  // Olvidó su contraseña: Dirección genera un código nuevo y la persona crea otra
+  await admin.getByRole('button', { name: 'Generar código de alta para lector@soc.test' }).click();
+  await admin.getByRole('dialog').getByRole('button', { name: 'Generar código' }).click();
+  await expect(admin.getByTestId('issued-code')).toContainText('lector@soc.test');
+  const code2 = (await admin.getByTestId('issued-code').locator('.alta-code').textContent())!.trim();
+  expect(code2).not.toBe(code);
+  await lector.getByRole('button', { name: 'Salir' }).click();
+  await lector.getByLabel('Correo').fill('lector@soc.test');
+  await lector.getByLabel('Contraseña').fill('MiClave-2026');
+  await lector.getByRole('button', { name: 'Entrar' }).click();
+  await expect(lector.getByRole('alert')).toContainText('Correo o contraseña incorrectos');
+  await lector.getByRole('button', { name: 'Primera vez: crear mi contraseña' }).click();
+  await lector.getByLabel('Correo').fill('lector@soc.test');
+  await lector.getByLabel('Código de alta').fill(code2);
+  await lector.getByLabel('Nueva contraseña').fill('OtraClave-2026');
+  await lector.getByLabel('Confirmar contraseña').fill('OtraClave-2026');
+  await lector.getByRole('button', { name: 'Crear contraseña y entrar' }).click();
+  await expect(lector.locator('.user-name')).toContainText('Consulta (sólo lectura)');
 
   expect(errors).toEqual([]);
 });

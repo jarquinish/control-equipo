@@ -9,7 +9,7 @@ export const LOCKED_FIELDS = ['impacto', 'urgencia', 'dependencia', 'solicitante
 /** Dirección o Administración (en modo local sin usuario identificado se permite todo). */
 export function isDirector(ctx: ServiceContext): boolean {
   const id = ctx.userId();
-  const rol = id ? ctx.repos.people.read(id)?.rol : undefined;
+  const rol = ctx.store.role ?? (id ? ctx.repos.people.read(id)?.rol : undefined);
   return !rol || rol === 'ADMIN' || rol === 'DIRECTOR';
 }
 

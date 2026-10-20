@@ -4,7 +4,7 @@ import { COMMITMENT_FILTER_STATUSES, COMMITMENT_STATUS_LABELS, PRIORITIES } from
 import { fmtDeadline } from '../../domain/dates';
 import { commitmentDisplayStatus, dependencyLabel, isOpenCommitment, sortByDeadline, sortWeeks } from '../../domain/selectors';
 import type { Commitment } from '../../domain/types';
-import { useApp, useCurrentUser, useDb, useOpsData } from '../../state/app';
+import { useApp, useCanEdit, useCurrentUser, useDb, useOpsData } from '../../state/app';
 import { Link, navigate, useQuery } from '../../state/router';
 import { CommitmentStatusChip, PriorityBadge } from '../../ui/badges';
 import { downloadFile, EmptyState, PageHeader } from '../../ui/common';
@@ -14,6 +14,7 @@ import { CommitmentActions, CommitmentTable } from './CommitmentTable';
 
 export function CommitmentsPage() {
   const db = useDb();
+  const canEdit = useCanEdit();
   const data = useOpsData();
   const user = useCurrentUser();
   const { now } = useApp();
@@ -62,7 +63,7 @@ export function CommitmentsPage() {
             <button className="btn btn-secondary" onClick={() => downloadFile('compromisos.csv', commitmentsCsv(db, now), 'text/csv;charset=utf-8')}>
               <Download size={16} aria-hidden /> CSV
             </button>
-            {data.live && (
+            {data.live && canEdit && (
               <button className="btn btn-primary" onClick={() => modals.open({ type: 'commitment' })}>
                 <Plus size={16} aria-hidden /> Nuevo compromiso
               </button>

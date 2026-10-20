@@ -3,6 +3,7 @@
 --
 -- Ejecutar completo en: Supabase → SQL Editor → New query → Run.
 -- Es idempotente: se puede volver a ejecutar sin perder información.
+-- Si ya ejecutaste 0002 y 0003, vuelve a ejecutarlos después de este archivo.
 --
 -- Diseño:
 --   · au_members   → quién tiene acceso (por correo) y con qué rol.

@@ -7,6 +7,7 @@ La app se publica como **una página de HubSpot** creada con una **plantilla de 
 | `alignment-unblock-hubspot.html` | La app completa en un solo archivo: plantilla de página de HubSpot. | Equipo web (HubSpot) |
 | `0001_alignment_unblock.sql` | Tablas y seguridad de la base de datos. | Quien administre Supabase |
 | `0002_prioridad_dos_ejes.sql` | Prioridad en dos ejes: bitácora inalterable y acuerdo de prioridades protegido en el servidor. | Quien administre Supabase |
+| `0003_acceso_consulta.sql` | Rol **Consulta** (sólo lectura) y alta con código: cada persona crea su propia contraseña. | Quien administre Supabase |
 | `Plantilla_Inventario_Alignment_Unblock.xlsx` | Formato para que cada área cargue sus proyectos. | Gerentes |
 
 > **No subas el .html al Administrador de archivos (Files).** HubSpot sirve los .html de *Files* como texto plano en su dominio y la app no abriría. Va en el **Design Manager** como plantilla.
@@ -18,7 +19,7 @@ Tiempo estimado: 45–60 min la primera vez.
 ## 1. Base de datos (Supabase)
 
 1. <https://supabase.com> → **New project** → nombre `alignment-unblock`, región *East US* (o la más cercana). Guarda la contraseña.
-2. **SQL Editor → New query** → pega todo `0001_alignment_unblock.sql` → **Run**. Después, en otra consulta, `0002_prioridad_dos_ejes.sql` → **Run**.
+2. **SQL Editor → New query** → pega todo `0001_alignment_unblock.sql` → **Run**. Después, en otra consulta, `0002_prioridad_dos_ejes.sql` → **Run**, y luego `0003_acceso_consulta.sql` → **Run**.
 3. Nueva consulta, con el correo de quien administrará la herramienta → **Run**:
 
    ```sql
@@ -67,14 +68,27 @@ Tiempo estimado: 45–60 min la primera vez.
 
 Mientras no haya SMTP (Resend), se entra con **correo y contraseña** y no se envía ningún correo. En la plantilla deja `emailCode: false` (así viene).
 
-1. Supabase → **Authentication → Users → Add user → Create new user**: correo, contraseña y marca **Auto Confirm User** → **Create user**. Repite por cada persona y comparte la contraseña por un canal privado.
-2. Esa persona debe estar dada de alta en `au_members` (el administrador, con el SQL del paso 1; los demás, desde **Configuración → Accesos** en la herramienta). La cuenta sola no da acceso.
-3. Cuando Resend esté listo: plantilla con `{{ .Token }}`, `emailCode: true` y publica. Desde entonces también se podrá entrar con código.
+**Cada persona crea su propia contraseña con un código de alta** (requiere `0003_acceso_consulta.sql`):
+
+1. Supabase → **Authentication → Sign In / Providers → Email**: **Allow new users to sign up** activado y **Confirm email** desactivado → **Save**. Es seguro: una cuenta nueva no da acceso si su correo no está en Accesos, y un correo con acceso sólo se activa con su código.
+2. En la herramienta, **Configuración → Accesos** → correo y rol → **Dar acceso**. Aparece su **código de alta** (`XXXX-XXXX-XXXX`, vence en 30 días). Para varias personas a la vez, en el SQL Editor:
+
+   ```sql
+   select n.nombre, n.email, public.au_generar_alta(n.email, 'CONSULTA', n.nombre) as codigo
+   from (values ('Nombre Apellido', 'correo@socasesores.com.mx')) as n(nombre, email);
+   ```
+
+3. Entrega a cada quien su código por un canal privado. La persona abre la página → **Primera vez: crear mi contraseña** → correo, código y su contraseña (mínimo 8 caracteres) → entra. La contraseña la guarda Supabase; nadie más la conoce.
+4. ¿Olvidó su contraseña? **Accesos → Código** en su fila: el código nuevo invalida la contraseña anterior y la persona crea otra.
+
+Las cuentas creadas antes a mano (**Authentication → Users → Add user**) siguen funcionando: `0003` las vincula a su correo. Si después creas otra a mano, ejecuta `select public.au_vincular_cuentas();`.
+
+Cuando Resend esté listo: plantilla con `{{ .Token }}`, `emailCode: true` y publica. Desde entonces también se podrá entrar con código por correo.
 
 ## 4. Primer ingreso
 
 1. Abre la página → correo y contraseña de administrador (o código por correo si `emailCode: true`) → **Entrar**. El primer ingreso crea las 4 áreas y la semana actual.
-2. **Configuración → Accesos**: agrega el correo de cada gerente con rol **Gerente** (y colaboradores si aplica).
+2. **Configuración → Accesos**: agrega el correo de cada gerente con rol **Gerente** (colaboradores y personas de **Consulta** si aplica) y entrégale su código de alta.
 3. Cada gerente entra con su correo y usa **Actualizar mi área → Importar Excel de su área** (o el registro de su área en la Sesión 1). La carga queda guardada en Supabase y se refleja en el dashboard de todos.
 
 ## Actualizar a una versión nueva
@@ -90,6 +104,9 @@ Design Manager → abre `alignment-unblock` → copia tu bloque `AU_CONFIG` → 
 | «Falta conectar la base de datos» | `AU_CONFIG` vacío o con espacios/comillas de más. |
 | Se ve el código fuente en lugar de la app | Se subió a *Files* en vez del Design Manager. |
 | «Tu correo aún no tiene acceso» | Falta darlo de alta en **Configuración → Accesos**. |
+| «Completa tu alta» al entrar | La persona tiene acceso pero aún no usa su código: que lo escriba ahí, o genérale uno nuevo en **Accesos → Código**. |
+| «El código no corresponde a ese correo o ya expiró» | Código mal escrito, de otro correo, ya usado o vencido (30 días): genera uno nuevo. |
+| «El registro está desactivado» / «pidió confirmar el correo» | Revisa el paso 1 de *Acceso con contraseña* (sign up activado, Confirm email desactivado) y genera un código nuevo. |
 | No llega el código | SMTP sin configurar o el correo en cuarentena; revisar paso 1.6. |
 | «Tu rol no permite guardar este cambio» al validar prioridades | Falta ejecutar `0002_prioridad_dos_ejes.sql`, o la persona no tiene rol Dirección/Administrador. |
 | Error al conectar | El dominio tiene una política de seguridad (CSP) que bloquea `*.supabase.co`; agrégalo a `connect-src`. |

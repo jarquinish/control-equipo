@@ -16,7 +16,9 @@ import { ensureIdentity } from '../../src/services/identityService';
 let stack: { url: string; anonKey: string; stop: () => void; psql: (a: string[]) => string };
 
 function clientFor(email: string) {
-  const token = signJwt({ sub: email, email, role: 'authenticated', aud: 'authenticated', exp: Math.floor(Date.now() / 1000) + 3600 });
+  // La cuenta de la pila (auth.users) vinculada al correo, como en Supabase.
+  const sub = stack.psql(['-At', '-c', `select id from auth.users where email = '${email}'`]).trim() || email;
+  const token = signJwt({ sub, email, role: 'authenticated', aud: 'authenticated', amr: [{ method: 'otp' }], exp: Math.floor(Date.now() / 1000) + 3600 });
   return createClient(stack.url, stack.anonKey, { auth: { persistSession: false }, global: { headers: { Authorization: `Bearer ${token}` } } });
 }
 

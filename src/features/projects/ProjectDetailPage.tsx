@@ -3,7 +3,7 @@ import { AlertOctagon, Archive, ArrowLeft, CheckCircle2, ListPlus, Pencil, Rotat
 import { DEPENDENCY_LABELS, IMPACT_HINTS, IMPACT_LABELS, QUADRANT_LABELS, URGENCY_LABELS } from '../../domain/constants';
 import { fmtDate, fmtDateTime } from '../../domain/dates';
 import { blockIsManaged, dependencyLabel, isActiveProject, isOpenCommitment, personName, sortWeeks } from '../../domain/selectors';
-import { useActiveWeek, useApp, useCurrentUser, useDb, useServices, useSettings } from '../../state/app';
+import { useActiveWeek, useApp, useCanEdit, useCurrentUser, useDb, useServices, useSettings } from '../../state/app';
 import { Link, navigate } from '../../state/router';
 import { AreaDot, AxisBadge, BlockedChip, BlockStatusChip, Chip, ClassBadge, LockBadge, PriorityBadge, ProjectStatusChip, QuadrantChip } from '../../ui/badges';
 import { EmptyState, Section } from '../../ui/common';
@@ -47,7 +47,8 @@ export function ProjectDetailPage({ id }: { id: string }) {
   const blocks = db.blocks.filter((b) => b.projectId === p.id).sort((a, b) => Number(a.estado === 'resuelto') - Number(b.estado === 'resuelto') || b.createdAt.localeCompare(a.createdAt));
   const commitments = db.commitments.filter((c) => c.projectId === p.id).sort((a, b) => Number(!isOpenCommitment(a)) - Number(!isOpenCommitment(b)) || `${a.fecha}${a.hora}`.localeCompare(`${b.fecha}${b.hora}`));
   const decisions = db.decisions.filter((d) => d.projectId === p.id);
-  const editable = !!active && active.estado === 'abierta';
+  const canEdit = useCanEdit();
+  const editable = !!active && active.estado === 'abierta' && canEdit;
   const activeProject = isActiveProject(p);
   const comments = evolution.filter((e) => e.u?.comentario);
 
@@ -299,7 +300,7 @@ export function ProjectDetailPage({ id }: { id: string }) {
       </Section>
 
       <Section title={`Compromisos (${commitments.filter(isOpenCommitment).length} abiertos)`} actions={editable && activeProject ? <button className="btn btn-sm btn-secondary" onClick={() => modals.open({ type: 'commitment', projectId: p.id })}>Nuevo compromiso</button> : undefined}>
-        {commitments.length === 0 ? <p className="muted">Sin compromisos.</p> : <CommitmentTable rows={commitments} showProject={false} showFail asOf={now} />}
+        {commitments.length === 0 ? <p className="muted">Sin compromisos.</p> : <CommitmentTable rows={commitments} showProject={false} showFail asOf={now} readOnly={!editable} />}
       </Section>
 
       <div className="two-col">

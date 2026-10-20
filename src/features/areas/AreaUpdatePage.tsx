@@ -6,7 +6,7 @@ import { computePriority } from '../../domain/scoring';
 import { areaUpdateFor, isActiveProject, personName, projectUpdatedThisWeek, sortProjectsByPriority } from '../../domain/selectors';
 import type { Level, Project, ProjectStatus } from '../../domain/types';
 import { can } from '../../domain/permissions';
-import { useActiveWeek, useCurrentUser, useDb, useServices, useSettings, useWeekData } from '../../state/app';
+import { useActiveWeek, useCanEdit, useCurrentUser, useDb, useServices, useSettings, useWeekData } from '../../state/app';
 import { Link, navigate, useQuery } from '../../state/router';
 import { AxisBadge, BlockedChip, Chip, ClassBadge, LockBadge, PriorityBadge } from '../../ui/badges';
 import { EmptyState, PageHeader } from '../../ui/common';
@@ -18,6 +18,7 @@ import { ProjectQuickForm } from '../projects/ProjectQuickForm';
 /** ACTUALIZAR MI SEMANA: flujo rápido para que cada gerente prepare la Weekly. */
 export function AreaUpdatePage() {
   const db = useDb();
+  const canEdit = useCanEdit();
   const data = useWeekData();
   const active = useActiveWeek();
   const services = useServices();
@@ -30,7 +31,7 @@ export function AreaUpdatePage() {
   const area = db.areas.find((a) => a.id === areaId);
 
   if (!data || !area) return null;
-  const live = data.live && data.week.id === active?.id;
+  const live = data.live && data.week.id === active?.id && canEdit;
   const projects = data.projects.filter((p) => p.areaId === area.id && isActiveProject(p)).sort(sortProjectsByPriority);
   const done = areaUpdateFor(data, area.id);
   const pending = projects.filter((p) => !projectUpdatedThisWeek(data, p.id));

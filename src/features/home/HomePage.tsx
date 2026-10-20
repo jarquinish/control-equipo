@@ -19,7 +19,7 @@ import { computeKpis } from '../../domain/metrics';
 import { cargaPorArea, CLASIFICACION_LABELS, CLASIFICACIONES } from '../../domain/priority';
 import { areaUpdateFor, dependencyLabel, isActiveProject } from '../../domain/selectors';
 import { RULES } from '../../domain/constants';
-import { useApp, useCurrentUser, useDb, useServices, useSettings, useWeekData } from '../../state/app';
+import { useApp, useCanEdit, useCurrentUser, useDb, useServices, useSettings, useWeekData } from '../../state/app';
 import { Link, navigate } from '../../state/router';
 import { demoEnabled } from '../../state/workspace';
 import { AreaDot, BlockedChip, Chip, ClassBadge, PriorityBadge } from '../../ui/badges';
@@ -44,6 +44,7 @@ export function HomePage() {
   const services = useServices();
   const modals = useModals();
   const { run } = useFeedback();
+  const canEdit = useCanEdit();
 
   const ref = data?.live ? now : (data?.asOf ?? now);
   const kpis = useMemo(() => (data ? (data.snapshot?.kpis ?? computeKpis(data, ref, db.commitments)) : null), [db, data, ref]);
@@ -70,7 +71,7 @@ export function HomePage() {
     <button className="btn btn-xl btn-secondary" onClick={() => modals.open({ type: 'summary', weekId: data.week.id })}>
       <CalendarCheck2 size={22} aria-hidden /> Ver resumen de la Weekly
     </button>
-  ) : !data.live ? null : session?.estado === 'en_curso' ? (
+  ) : !data.live || !canEdit ? null : session?.estado === 'en_curso' ? (
     <button className="btn btn-xl btn-primary" onClick={() => navigate('/weekly/junta')}>
       <PlayCircle size={22} aria-hidden /> {session.tipo === 'arranque' ? 'Continuar Sesión 1' : `Continuar Weekly · Paso ${session.pasoActual}`}
     </button>
@@ -97,7 +98,7 @@ export function HomePage() {
         <div className="hero-cta">{cta}</div>
       </header>
 
-      {data.live && (
+      {data.live && canEdit && (
         <nav className="quick-actions" aria-label="Acciones rápidas">
           <button className="qa" onClick={() => modals.open({ type: 'project', areaId: user?.areaId })}>
             <Plus size={18} aria-hidden /> Nuevo proyecto
@@ -123,7 +124,7 @@ export function HomePage() {
             const up = areaUpdateFor(data, a.id);
             return (
               <li key={a.id}>
-                <Link to={data.live ? `/actualizar?area=${a.id}` : `/areas/${a.id}`} className={`area-pill ${up ? 'done' : 'pending'}`} data-testid={`area-status-${a.nombre}`}>
+                <Link to={data.live && canEdit ? `/actualizar?area=${a.id}` : `/areas/${a.id}`} className={`area-pill ${up ? 'done' : 'pending'}`} data-testid={`area-status-${a.nombre}`}>
                   <AreaDot color={a.color} name={a.nombre} />
                   {up ? (
                     <span className="status ok">
@@ -147,7 +148,7 @@ export function HomePage() {
             icon={<UserCheck size={36} />}
             title="Bienvenido a Alignment & Unblock"
             action={
-              <div className="row gap">
+              canEdit && <div className="row gap">
                 <button className="btn btn-primary" onClick={() => modals.open({ type: 'project' })}>
                   <Plus size={16} aria-hidden /> Registrar primer proyecto
                 </button>

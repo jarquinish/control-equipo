@@ -3,7 +3,7 @@ import { WEEKLY_STEPS } from '../../domain/constants';
 import { fmtDate, fmtDateTime, fmtShort } from '../../domain/dates';
 import { areaUpdateFor, blockIsManaged, getWeekData, isActiveProject, isBlockOpen } from '../../domain/selectors';
 import { reviewCommitments } from '../../domain/weekly';
-import { useActiveWeek, useApp, useDb, useServices } from '../../state/app';
+import { useActiveWeek, useApp, useCanEdit, useDb, useServices } from '../../state/app';
 import { navigate } from '../../state/router';
 import { PageHeader, Section } from '../../ui/common';
 import { useFeedback } from '../../ui/feedback';
@@ -16,6 +16,7 @@ export function WeeklyPage() {
   const modals = useModals();
   const { now, setViewWeekId } = useApp();
   const { run, confirm, toast } = useFeedback();
+  const canEdit = useCanEdit();
   if (!week) return null;
   const data = getWeekData(db, week.id, now)!;
   const session = services.sessions.forWeek(week.id);
@@ -55,9 +56,11 @@ export function WeeklyPage() {
               <button className="btn btn-secondary btn-lg" onClick={() => modals.open({ type: 'summary', weekId: week.id })}>
                 <ClipboardList size={18} aria-hidden /> Ver resumen
               </button>
-              <button className="btn btn-primary btn-lg" onClick={openNext}>
-                <CalendarPlus size={18} aria-hidden /> Abrir semana siguiente
-              </button>
+              {canEdit && (
+                <button className="btn btn-primary btn-lg" onClick={openNext}>
+                  <CalendarPlus size={18} aria-hidden /> Abrir semana siguiente
+                </button>
+              )}
             </div>
           </>
         ) : session?.estado === 'en_curso' ? (
@@ -71,9 +74,13 @@ export function WeeklyPage() {
                 {session.tipo === 'arranque' && ` · ${(session.areasCerradas ?? []).length} de ${areas.length} áreas cerradas`}
               </p>
             </div>
-            <button className="btn btn-primary btn-xl" onClick={() => navigate('/weekly/junta')}>
-              <PlayCircle size={22} aria-hidden /> {session.tipo === 'arranque' ? 'Continuar Sesión 1' : 'Continuar Weekly'}
-            </button>
+            {canEdit ? (
+              <button className="btn btn-primary btn-xl" onClick={() => navigate('/weekly/junta')}>
+                <PlayCircle size={22} aria-hidden /> {session.tipo === 'arranque' ? 'Continuar Sesión 1' : 'Continuar Weekly'}
+              </button>
+            ) : (
+              <p className="small muted" data-testid="weekly-readonly">La Weekly la conduce Dirección.</p>
+            )}
           </>
         ) : (
           <>
@@ -87,7 +94,9 @@ export function WeeklyPage() {
               </p>
             </div>
             <div className="launch-actions">
-              {firstTime ? (
+              {!canEdit ? (
+                <p className="small muted" data-testid="weekly-readonly">La Weekly la conduce Dirección.</p>
+              ) : firstTime ? (
                 <>
                   <button className="btn btn-primary btn-xl" onClick={() => start('arranque')} data-testid="start-kickoff">
                     <PlayCircle size={22} aria-hidden /> Iniciar Sesión 1

@@ -253,7 +253,7 @@ src/
 │   ├── weekly.ts       Orden de DETECTAR, compromisos a revisar, validaciones de cierre
 │   ├── summary.ts      Resumen ejecutivo (Markdown / texto)
 │   ├── validation.ts   Validaciones con mensajes para usuario
-│   └── permissions.ts  Matriz de roles (ADMIN, DIRECTOR, GERENTE, COLABORADOR)
+│   └── permissions.ts  Matriz de roles (ADMIN, DIRECTOR, GERENTE, COLABORADOR, CONSULTA)
 ├── data/             Almacenamiento
 │   ├── store.ts        DataStore: caché en memoria + cola de escritura asíncrona
 │   ├── repository.ts   Repositorio genérico (list/read/filter/create/update/upsert/delete)
@@ -279,7 +279,7 @@ Flujo: **UI → servicios → repositorios → DataStore → StorageAdapter**. L
 | Entidad | Campos clave |
 |---|---|
 | `Area` | id, nombre, responsable, activo, orden, color, createdAt, updatedAt |
-| `Person` | id, nombre, email, rol (ADMIN/DIRECTOR/GERENTE/COLABORADOR), areaId, activo |
+| `Person` | id, nombre, email, rol (ADMIN/DIRECTOR/GERENTE/COLABORADOR/CONSULTA), areaId, activo |
 | `Project` | id, nombre, descripcion, areaId, responsable, impacto, urgencia, dependencia, score, prioridadCalculada, prioridadFinal, ajusteDireccion, motivoAjuste, eisenhower, estado, bloqueado, fechaObjetivo, dependeDe, createdAt, updatedAt |
 | `Week` | id (`2026-W41`), numero, anio, fechaInicio, fechaFin, estado (abierta/cerrada), createdAt, closedAt |
 | `WeeklyUpdate` | id (`wu_<semana>_<proyecto>`, uno por proyecto y semana), weekId, projectId, areaId, estado, impacto, urgencia, dependencia, score, prioridad, bloqueado, eisenhower, comentario, origen (área/junta/cierre), updatedBy, updatedAt |
@@ -346,7 +346,7 @@ Guía paso a paso: **[docs/SUPABASE.md](docs/SUPABASE.md)** (crear proyecto, eje
 
 - Activación: `VITE_STORAGE=supabase`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` (ver `.env.example`).
 - Esquema y seguridad: [`supabase/migrations/0001_alignment_unblock.sql`](supabase/migrations/0001_alignment_unblock.sql) — tabla `au_records` (documento JSON por entidad, auditoría `updated_by/updated_at`), `au_members` (acceso por correo y rol), RLS por rol, funciones `au_replace_all` / `au_clear` sólo para Admin/Dirección, tiempo real y vistas para Power BI.
-- App: pantalla de acceso (código por correo y botón Microsoft opcional), verificación de que el correo esté dado de alta, vínculo automático con la persona del directorio, **Configuración → Accesos**, cambios de otros usuarios en tiempo real y recarga automática si el servidor rechaza un cambio.
+- App: pantalla de acceso (código por correo y botón Microsoft opcional), verificación de que el correo esté dado de alta, vínculo automático con la persona del directorio, **Configuración → Accesos** (con código de alta para que cada persona cree su contraseña y rol Consulta de sólo lectura, [`0003_acceso_consulta.sql`](supabase/migrations/0003_acceso_consulta.sql)), cambios de otros usuarios en tiempo real y recarga automática si el servidor rechaza un cambio.
 - Código: `src/data/adapters/supabaseAdapter.ts`, `src/state/auth.tsx`, `src/services/identityService.ts`, `src/features/settings/AccessSection.tsx`.
 
 ### API REST propia (alternativa)

@@ -1,4 +1,4 @@
-import { useWeekData, useDb } from '../../state/app';
+import { useWeekData, useDb, useCanEdit } from '../../state/app';
 import { useQuery } from '../../state/router';
 import { PageHeader } from '../../ui/common';
 import { EisenhowerBoard } from './EisenhowerBoard';
@@ -6,6 +6,7 @@ import { EisenhowerBoard } from './EisenhowerBoard';
 export function EisenhowerPage() {
   const data = useWeekData();
   const db = useDb();
+  const canEdit = useCanEdit();
   const [q, setQ] = useQuery();
   if (!data) return null;
   const area = q.get('area') ?? '';
@@ -25,7 +26,7 @@ export function EisenhowerPage() {
           </select>
         }
       />
-      <EisenhowerBoard projects={data.projects} readOnly={data.readOnly} areaFilter={area} />
+      <EisenhowerBoard projects={data.projects} readOnly={data.readOnly || !canEdit} areaFilter={area} />
     </div>
   );
 }

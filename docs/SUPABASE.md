@@ -16,7 +16,7 @@ Tiempo estimado: **30–40 minutos** la primera vez. No requiere programar.
 ## 2. Crear las tablas y la seguridad
 
 1. En el proyecto: **SQL Editor → New query**.
-2. Copia todo el contenido de [`supabase/migrations/0001_alignment_unblock.sql`](../supabase/migrations/0001_alignment_unblock.sql), pégalo y presiona **Run**. Repite con [`0002_prioridad_dos_ejes.sql`](../supabase/migrations/0002_prioridad_dos_ejes.sql) (bitácora de prioridades y acuerdo protegido en el servidor). Ejecútalos en orden; los dos se pueden volver a ejecutar sin perder información.
+2. Copia todo el contenido de [`supabase/migrations/0001_alignment_unblock.sql`](../supabase/migrations/0001_alignment_unblock.sql), pégalo y presiona **Run**. Repite con [`0002_prioridad_dos_ejes.sql`](../supabase/migrations/0002_prioridad_dos_ejes.sql) (bitácora de prioridades y acuerdo protegido en el servidor) y con [`0003_acceso_consulta.sql`](../supabase/migrations/0003_acceso_consulta.sql) (rol Consulta y alta con código para que cada persona cree su contraseña). Ejecútalos en orden; se pueden volver a ejecutar sin perder información.
 3. En una consulta nueva, date acceso de administrador **con tu correo** y presiona **Run**:
 
    ```sql
@@ -79,7 +79,7 @@ Copia de **Project Settings → API**: *Project URL* y *anon public key* (es pú
 1. Abre la URL, escribe tu correo, recibe el código y entra.
    Como administrador, tu primer ingreso **inicializa el espacio** (4 áreas y semana actual).
 2. Si ya trabajaste el piloto en un navegador: en esa versión, **Configuración → Generar respaldo**; luego, en la versión con Supabase, **Configuración → Restaurar respaldo**. Se sube todo: proyectos, historial, compromisos.
-3. **Configuración → Accesos**: agrega el correo de cada gerente con rol **Gerente** (y colaboradores si aplica). Opcionalmente vincúlalo a su persona del directorio; si no, se vincula por correo.
+3. **Configuración → Accesos**: agrega el correo de cada gerente con rol **Gerente** (colaboradores y personas de **Consulta** si aplica). Opcionalmente vincúlalo a su persona del directorio; si no, se vincula por correo. Al dar acceso aparece su **código de alta**: con él, la persona entra a **Primera vez: crear mi contraseña** (requiere *Allow new users to sign up* activado y *Confirm email* desactivado en **Authentication → Sign In / Providers → Email**).
 
 Listo: cada quien entra con su correo y los cambios aparecen en tiempo real para todos.
 
@@ -87,22 +87,25 @@ Listo: cada quien entra con su correo y los cambios aparecen en tiempo real para
 
 ## Roles
 
-| Puede… | Admin | Dirección | Gerente | Colaborador |
-|---|:-:|:-:|:-:|:-:|
-| Ver todo el espacio | ✓ | ✓ | ✓ | ✓ |
-| Proyectos, bloqueos, compromisos, Weekly | ✓ | ✓ | ✓ | ✓* |
-| Ajustar prioridad (override), abrir semana | ✓ | ✓ | — | — |
-| Áreas y configuración | ✓ | ✓ | — | — |
-| Accesos, restaurar respaldo, borrar todo | ✓ | ✓ | — | — |
+| Puede… | Admin | Dirección | Gerente | Colaborador | Consulta |
+|---|:-:|:-:|:-:|:-:|:-:|
+| Ver todo el espacio (prioridades, proyectos, historial) | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Proyectos, bloqueos, compromisos, Weekly | ✓ | ✓ | ✓ | ✓* | — |
+| Ajustar prioridad (override), abrir semana | ✓ | ✓ | — | — | — |
+| Áreas y configuración | ✓ | ✓ | — | — | — |
+| Accesos, códigos de alta, restaurar respaldo, borrar todo | ✓ | ✓ | — | — | — |
 
 \* La interfaz orienta al colaborador a gestionar compromisos.
+
+**Consulta** es de sólo lectura en el servidor: cualquier alta, cambio o borrado se rechaza aunque se intente fuera de la app.
 
 **Qué impone el servidor (RLS) y qué la interfaz:** áreas, configuración (incluida la semana activa, por lo que *abrir semana*), accesos, restaurar y borrar los **rechaza el servidor** si el rol no corresponde. El ajuste de prioridad por Dirección lo controla la interfaz (un gerente no ve el botón habilitado), porque vive dentro del registro del proyecto que los gerentes sí pueden editar.
 
 ## Cómo funciona por dentro
 
 - `au_records`: una fila por entidad (`collection`, `id`, `data` JSON), con `updated_by` y `updated_at` automáticos (auditoría).
-- `au_members`: correos con acceso y rol.
+- `au_members`: correos con acceso, rol, nombre y cuenta vinculada (`user_id`).
+- `au_altas`: códigos de alta pendientes (sólo su huella SHA-256; vencen en 30 días). Mientras un correo tenga código pendiente, sólo entra quien lo canjea (`au_completar_alta`). Una sesión con contraseña sólo entra si su cuenta está vinculada al correo; las sesiones por código de correo o Microsoft comprueban el correo y entran directamente.
 - RLS: sólo miembros activos leen/escriben; áreas, configuración y accesos sólo Admin/Dirección; restaurar (`au_replace_all`) y borrar (`au_clear`) sólo Admin/Dirección.
 - Tiempo real: `au_records` está en la publicación `supabase_realtime`; cada pestaña ignora el eco de sus propios cambios.
 - Vistas para reportes: `au_projects_v`, `au_commitments_v`, `au_blocks_v` (columnas tipadas, respetan la RLS) — útiles para Power BI.

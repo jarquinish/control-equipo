@@ -23,7 +23,7 @@ import {
 import { fmtDate, fmtShort } from '../../domain/dates';
 import { sortWeeks } from '../../domain/selectors';
 import { ROLE_LABELS } from '../../domain/constants';
-import { useActiveWeek, useApp, useCurrentUser, useDb, useServices, useWeekData } from '../../state/app';
+import { useActiveWeek, useApp, useCanEdit, useCurrentUser, useDb, useServices, useWeekData } from '../../state/app';
 import { Link, navigate, useLocation } from '../../state/router';
 import { useFeedback } from '../../ui/feedback';
 
@@ -188,6 +188,7 @@ function WeekNavigator() {
   const { setViewWeekId } = useApp();
   const services = useServices();
   const { confirm, toast } = useFeedback();
+  const canEdit = useCanEdit();
   const weeks = useMemo(() => sortWeeks(db.weeks), [db.weeks]);
   if (!data) return null;
   const idx = weeks.findIndex((w) => w.id === data.week.id);
@@ -236,7 +237,7 @@ function WeekNavigator() {
       <button className="btn btn-ghost btn-sm" disabled={data.week.id === active?.id} onClick={() => setViewWeekId(undefined)}>
         Semana actual
       </button>
-      <button className="btn btn-ghost btn-sm" onClick={goNext} aria-label={next ? 'Semana siguiente' : `Abrir semana ${preview.numero}`}>
+      <button className="btn btn-ghost btn-sm" disabled={!next && !canEdit} onClick={goNext} aria-label={next ? 'Semana siguiente' : `Abrir semana ${preview.numero}`}>
         <span className="hide-md">{next || !isLast ? 'Semana siguiente' : `Abrir Semana ${preview.numero}`}</span>
         <ChevronRight size={18} aria-hidden />
       </button>

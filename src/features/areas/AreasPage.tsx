@@ -3,7 +3,7 @@ import { AlertTriangle, ArrowLeft, CheckCircle2, RefreshCw } from 'lucide-react'
 import { fmtDateTime } from '../../domain/dates';
 import { computeKpis } from '../../domain/metrics';
 import { areaUpdateFor, dependencyLabel, isActiveProject, isBlockOpen, isOpenCommitment, personName, sortByDeadline, sortProjectsByPriority, type WeekData } from '../../domain/selectors';
-import { useApp, useDb, useWeekData } from '../../state/app';
+import { useApp, useCanEdit, useDb, useWeekData } from '../../state/app';
 import { Link, navigate } from '../../state/router';
 import { BlockedChip, BlockStatusChip, PriorityBadge, ProjectStatusChip } from '../../ui/badges';
 import { EmptyState, KpiCard, PageHeader, Section } from '../../ui/common';
@@ -81,6 +81,7 @@ export function AreasPage() {
 
 export function AreaDashboard({ id }: { id: string }) {
   const db = useDb();
+  const canEdit = useCanEdit();
   const data = useWeekData();
   const { now } = useApp();
   const area = db.areas.find((a) => a.id === id);
@@ -105,7 +106,7 @@ export function AreaDashboard({ id }: { id: string }) {
         title={area.nombre}
         subtitle={`Responsable: ${personName(db.people, area.responsable, 'sin asignar')} · ${up ? `actualizada ${fmtDateTime(up.completedAt)}` : 'actualización pendiente'}`}
         actions={
-          data.live && (
+          data.live && canEdit && (
             <Link to={`/actualizar?area=${id}`} className="btn btn-primary">
               <RefreshCw size={16} aria-hidden /> Actualizar mi área
             </Link>
@@ -174,7 +175,7 @@ export function AreaDashboard({ id }: { id: string }) {
       </div>
 
       <Section title="Compromisos abiertos">
-        {commitments.length === 0 ? <p className="muted">Sin compromisos abiertos.</p> : <CommitmentTable rows={commitments} readOnly={!data.live} asOf={ref} />}
+        {commitments.length === 0 ? <p className="muted">Sin compromisos abiertos.</p> : <CommitmentTable rows={commitments} readOnly={!data.live || !canEdit} asOf={ref} />}
       </Section>
     </div>
   );

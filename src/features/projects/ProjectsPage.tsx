@@ -6,7 +6,7 @@ import { fmtDate, toISODate } from '../../domain/dates';
 import { attentionOrder, CLASIFICACION_LABELS, CLASIFICACIONES } from '../../domain/priority';
 import { dependencyLabel, isActiveProject, isOverdue, personName, sortProjectsByPriority } from '../../domain/selectors';
 import type { Clasificacion, Project } from '../../domain/types';
-import { useApp, useDb, useSettings, useWeekData } from '../../state/app';
+import { useApp, useCanEdit, useDb, useSettings, useWeekData } from '../../state/app';
 import { Link, navigate, useQuery } from '../../state/router';
 import { AreaDot, AxisBadge, BlockedChip, ClassBadge, LockBadge, PriorityBadge, ProjectStatusChip, QuadrantChip } from '../../ui/badges';
 import { downloadFile, EmptyState, PageHeader } from '../../ui/common';
@@ -15,6 +15,7 @@ import { useModals } from '../modals/ModalHost';
 
 export function ProjectsPage() {
   const db = useDb();
+  const canEdit = useCanEdit();
   const data = useWeekData();
   const settings = useSettings();
   const { now } = useApp();
@@ -83,7 +84,7 @@ export function ProjectsPage() {
             <button className="btn btn-secondary" onClick={() => downloadFile('proyectos.csv', projectsCsv(db, now), 'text/csv;charset=utf-8')}>
               <Download size={16} aria-hidden /> CSV
             </button>
-            {!data.readOnly && (
+            {!data.readOnly && canEdit && (
               <button className="btn btn-primary" onClick={() => modals.open({ type: 'project', areaId: f.area || undefined })}>
                 <Plus size={16} aria-hidden /> Nuevo proyecto
               </button>

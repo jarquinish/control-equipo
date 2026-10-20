@@ -20,6 +20,8 @@ const MATRIX: Record<Role, Action[]> = {
   DIRECTOR: ['project.edit', 'project.override', 'weekly.run', 'weekly.close', 'week.open', 'commitment.manage', 'config.manage', 'data.restore'],
   GERENTE: ['project.edit', 'commitment.manage', 'weekly.run'],
   COLABORADOR: ['commitment.manage'],
+  /** Sólo consulta: ve toda la información y no modifica nada (también lo impide el servidor). */
+  CONSULTA: [],
 };
 
 export function can(user: Pick<Person, 'rol'> | undefined, action: Action): boolean {
@@ -29,3 +31,8 @@ export function can(user: Pick<Person, 'rol'> | undefined, action: Action): bool
 }
 
 export const PERMISSION_MATRIX = MATRIX;
+
+/** ¿Puede modificar algo? (consulta no). */
+export function canEditAnything(user: Pick<Person, 'rol'> | undefined): boolean {
+  return can(user, 'project.edit') || can(user, 'commitment.manage');
+}

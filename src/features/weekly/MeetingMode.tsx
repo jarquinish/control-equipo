@@ -4,7 +4,7 @@ import { WEEKLY_STEPS } from '../../domain/constants';
 import { fmtDate, fmtShort } from '../../domain/dates';
 import { getWeekData } from '../../domain/selectors';
 import type { Session } from '../../domain/types';
-import { useActiveWeek, useApp, useDb, useServices } from '../../state/app';
+import { useActiveWeek, useApp, useCanEdit, useDb, useServices } from '../../state/app';
 import { navigate } from '../../state/router';
 import { EmptyState } from '../../ui/common';
 import { Step1Review, Step2Visibilize, Step3Order, Step4Prioritize } from './steps1to4';
@@ -18,6 +18,19 @@ export function MeetingMode() {
   const { now } = useApp();
   const session = week ? services.sessions.forWeek(week.id) : undefined;
   const data = useMemo(() => (week ? getWeekData(db, week.id, now) : undefined), [db, week, now]);
+  const canEdit = useCanEdit();
+
+  if (!canEdit) {
+    return (
+      <div className="meeting">
+        <div className="meeting-empty">
+          <EmptyState title="La Weekly la conduce Dirección" action={<button className="btn btn-primary" onClick={() => navigate('/weekly')}>Ir a Weekly</button>}>
+            Tu acceso es de sólo consulta.
+          </EmptyState>
+        </div>
+      </div>
+    );
+  }
 
   if (!week || !data || !session || session.estado !== 'en_curso') {
     return (

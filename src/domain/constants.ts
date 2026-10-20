@@ -124,12 +124,13 @@ export const COMMITMENT_FILTER_STATUSES: CommitmentDisplayStatus[] = [
   'incumplido',
 ];
 
-export const ROLES: Role[] = ['ADMIN', 'DIRECTOR', 'GERENTE', 'COLABORADOR'];
+export const ROLES: Role[] = ['ADMIN', 'DIRECTOR', 'GERENTE', 'COLABORADOR', 'CONSULTA'];
 export const ROLE_LABELS: Record<Role, string> = {
   ADMIN: 'Administrador',
   DIRECTOR: 'Dirección',
   GERENTE: 'Gerente',
   COLABORADOR: 'Colaborador',
+  CONSULTA: 'Consulta (sólo lectura)',
 };
 
 export const WEEKLY_STEPS = [

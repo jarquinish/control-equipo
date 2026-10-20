@@ -1,4 +1,4 @@
-import { COLLECTIONS, type CollectionName, type DbData, type EntityOf } from '../domain/types';
+import { COLLECTIONS, type CollectionName, type DbData, type EntityOf, type Role } from '../domain/types';
 import type { ChangeOp, StorageAdapter } from './adapters/StorageAdapter';
 
 export function emptyData(): DbData {
@@ -35,6 +35,8 @@ export class DataStore {
   ready = false;
   /** Persona autenticada (modo multiusuario). Tiene prioridad sobre settings.currentUserId. */
   identity: string | undefined;
+  /** Rol del acceso autenticado (modo multiusuario); manda sobre el rol de la persona. */
+  role: Role | undefined;
   private unsubscribeRemote?: () => void;
 
   constructor(public adapter: StorageAdapter) {}

@@ -4,7 +4,9 @@
  *   · PostgreSQL 16 temporal con el stub de Supabase + la migración real
  *   · PostgREST (el mismo motor REST que usa Supabase) con verificación JWT
  *   · Servidor en :54321 que expone /rest/v1 (proxy a PostgREST) y un /auth/v1
- *     simulado (código por correo = 123456) que emite JWT como Supabase Auth.
+ *     simulado (código por correo = 123456, contraseña de prueba o la creada con
+ *     /signup) que emite JWT como Supabase Auth. Las cuentas viven en auth.users,
+ *     así que el id (sub) es estable y au_generar_alta puede borrarlas.
  *
  * No cubre Realtime ni el proveedor Microsoft (requieren el servicio real).
  *
@@ -36,6 +38,20 @@ export function signJwt(payload) {
   return `${head}.${body}.${sig}`;
 }
 export const ANON_KEY = signJwt({ role: 'anon', iss: 'supabase-local', exp: 4102444800 });
+
+/** psql de la pila en curso (lo fija startStack). */
+let db = null;
+const lit = (v) => (v == null ? 'null' : `'${String(v).replace(/'/g, "''")}'`);
+/** Cuenta por correo: { id, encrypted_password } o null. */
+function findUser(email) {
+  const out = db(['-At', '-F', '|', '-c', `select id, coalesce(encrypted_password, '') from auth.users where email = ${lit(email)}`]).trim();
+  if (!out) return null;
+  const [id, pass] = out.split('|');
+  return { id, password: pass || null };
+}
+function createUser(email, password = null) {
+  return db(['-At', '-c', `insert into auth.users (email, encrypted_password) values (${lit(email)}, ${lit(password)}) on conflict (email) do update set email = excluded.email returning id`]).trim().split('\n')[0];
+}
 
 function pgBin() {
   const base = '/usr/lib/postgresql';
@@ -73,9 +89,13 @@ export async function startStack({ members = [] } = {}) {
     }
   }
   const psql = (args) => execFileSync('psql', ['-X', '-q', '-v', 'ON_ERROR_STOP=1', '-h', dir, '-p', String(PG_PORT), '-U', 'postgres', '-d', 'postgres', ...args], { stdio: 'pipe' }).toString();
+  db = psql;
   psql(['-f', join(ROOT, 'supabase/tests/supabase_stub.sql')]);
   for (const m of readdirSync(join(ROOT, 'supabase/migrations')).filter((f) => f.endsWith('.sql')).sort()) psql(['-f', join(ROOT, 'supabase/migrations', m)]);
   for (const [email, rol] of members) psql(['-c', `insert into public.au_members (email, rol) values ('${email}', '${rol}')`]);
+  // Como si Dirección hubiera creado sus cuentas (Authentication → Users): quedan vinculadas.
+  for (const [email] of members) createUser(email);
+  psql(['-c', 'select public.au_vincular_cuentas()']);
 
   const conf = join(dir, 'postgrest.conf');
   writeFileSync(
@@ -132,11 +152,11 @@ async function readBody(req) {
   return Buffer.concat(chunks);
 }
 
-function session(email) {
+function session(email, id, method) {
   const now = Math.floor(Date.now() / 1000);
-  const user = { id: randomUUID(), aud: 'authenticated', role: 'authenticated', email, user_metadata: {}, app_metadata: { provider: 'email' }, created_at: new Date().toISOString() };
+  const user = { id, aud: 'authenticated', role: 'authenticated', email, user_metadata: {}, app_metadata: { provider: 'email' }, created_at: new Date().toISOString() };
   return {
-    access_token: signJwt({ sub: user.id, email, role: 'authenticated', aud: 'authenticated', iat: now, exp: now + 3600 }),
+    access_token: signJwt({ sub: user.id, email, role: 'authenticated', aud: 'authenticated', amr: [{ method, timestamp: now }], iat: now, exp: now + 3600 }),
     token_type: 'bearer',
     expires_in: 3600,
     expires_at: now + 3600,
@@ -176,12 +196,23 @@ async function handle(req, res) {
   if (url.pathname === '/auth/v1/verify') {
     const { email, token } = JSON.parse((await readBody(req)).toString() || '{}');
     if (token !== OTP_CODE) return json(403, { code: 403, error_code: 'otp_expired', msg: 'Token has expired or is invalid' });
-    return json(200, session(String(email).toLowerCase()));
+    const e = String(email).toLowerCase();
+    return json(200, session(e, findUser(e)?.id ?? createUser(e), 'otp'));
+  }
+  if (url.pathname === '/auth/v1/signup') {
+    const { email, password } = JSON.parse((await readBody(req)).toString() || '{}');
+    const e = String(email).toLowerCase();
+    if (findUser(e)) return json(422, { code: 422, error_code: 'user_already_exists', msg: 'User already registered' });
+    return json(200, session(e, createUser(e, password), 'password'));
   }
   if (url.pathname === '/auth/v1/token' && url.searchParams.get('grant_type') === 'password') {
     const { email, password } = JSON.parse((await readBody(req)).toString() || '{}');
-    if (password !== TEST_PASSWORD) return json(400, { code: 400, error_code: 'invalid_credentials', msg: 'Invalid login credentials' });
-    return json(200, session(String(email).toLowerCase()));
+    const e = String(email).toLowerCase();
+    const user = findUser(e);
+    // Cuenta con contraseña propia: debe coincidir; sin ella, vale la contraseña de prueba.
+    const ok = user?.password ? password === user.password : password === TEST_PASSWORD;
+    if (!ok) return json(400, { code: 400, error_code: 'invalid_credentials', msg: 'Invalid login credentials' });
+    return json(200, session(e, user?.id ?? createUser(e), 'password'));
   }
   if (url.pathname === '/auth/v1/logout') return json(204);
   if (url.pathname === '/auth/v1/user') {
