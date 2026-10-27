@@ -45,13 +45,26 @@ def convertir(md):
             out.append(t + '</table>')
             continue
         if re.match(r'^(\s*)([-*]|\d+\.)\s+', l):
-            ordenada = bool(re.match(r'^\s*\d+\.', l))
+            # Listas con anidación por sangría (2+ espacios por nivel).
             items = []
             while i < len(lineas) and re.match(r'^(\s*)([-*]|\d+\.)\s+', lineas[i]):
-                items.append(re.sub(r'^(\s*)([-*]|\d+\.)\s+', '', lineas[i]))
+                m = re.match(r'^(\s*)([-*]|\d+\.)\s+(.*)', lineas[i])
+                items.append((len(m.group(1)) // 2, m.group(2)[0].isdigit(), m.group(3)))
                 i += 1
-            tag = 'ol' if ordenada else 'ul'
-            out.append(f'<{tag}>' + ''.join(f'<li>{inline(x)}</li>' for x in items) + f'</{tag}>')
+            html_l, pila = '', []
+            for nivel, ordenada, texto in items:
+                tag = 'ol' if ordenada else 'ul'
+                while pila and pila[-1][0] > nivel:
+                    html_l += f'</li></{pila.pop()[1]}>'
+                if pila and pila[-1][0] == nivel:
+                    html_l += '</li>'
+                else:
+                    html_l += f'<{tag}>'
+                    pila.append((nivel, tag))
+                html_l += f'<li>{inline(texto)}'
+            while pila:
+                html_l += f'</li></{pila.pop()[1]}>'
+            out.append(html_l)
             continue
         if l.startswith('>'):
             out.append(f'<blockquote>{inline(l.lstrip("> "))}</blockquote>')
