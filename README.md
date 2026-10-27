@@ -210,8 +210,9 @@ Al cerrar se guarda un **snapshot inmutable** de la semana (proyectos, prioridad
 - **Compromisos**: tabla filtrable + **Mis compromisos** por responsable.
 - **Dependencias**: *quién necesita → qué → de quién → para cuándo*, con cuellos de botella y filtros.
 - **Áreas**: tablero por área (proyectos, P1, bloqueados, compromisos, vencidos, lo que necesitamos de otros y lo que otros necesitan de nosotros).
+- **Inversión y KPIs**: resumen ejecutivo, desempeño por gerencia (sin índice único), proyectos e inversión, control presupuestal (autorizado, vigente, ejercido, comprometido, disponible, movimientos y validaciones de cuadre), KPIs y resultados (meta vs resultado por periodo), eficiencia y rentabilidad (CPL, costo por MQL/SQL/cierre, CPA, ROAS, ROI con fórmula y motivo cuando no se calcula) y centro de decisiones. Ver [docs/INVERSION_KPIS.md](docs/INVERSION_KPIS.md).
 - **Historial**: semanas con su fotografía (proyectos, Eisenhower, bloqueos, compromisos, decisiones, resumen) y **Salud de ejecución** (cumplimiento por semana, vencidos, reprogramaciones, tiempo promedio de desbloqueo, dependencias y bloqueos recurrentes, proyectos abiertos demasiado tiempo).
-- **Proyecto**: ponderación, **evolución semanal** (`SEMANA 39 → P2 · SEMANA 40 → P1 · BLOQUEADO …`), bloqueos, compromisos, decisiones y comentarios.
+- **Proyecto**: ponderación, **inversión, KPIs y resultados** (partidas que lo financian, KPIs a los que contribuye, gerencias colaboradoras, índice complementario), **evolución semanal** (`SEMANA 39 → P2 · SEMANA 40 → P1 · BLOQUEADO …`), bloqueos, compromisos, decisiones y comentarios.
 - **Búsqueda global** (Ctrl+K) en proyectos, compromisos, bloqueos y personas.
 
 ### Cumplimiento: cómo se calcula

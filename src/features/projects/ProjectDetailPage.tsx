@@ -11,6 +11,7 @@ import { useFeedback } from '../../ui/feedback';
 import { CommitmentTable } from '../commitments/CommitmentTable';
 import { useModals } from '../modals/ModalHost';
 import { PriorityPanel } from './PriorityPanel';
+import { ProjectInvestmentPanel } from '../investment/ProjectInvestmentPanel';
 import { can } from '../../domain/permissions';
 
 export function ProjectDetailPage({ id }: { id: string }) {
@@ -25,6 +26,7 @@ export function ProjectDetailPage({ id }: { id: string }) {
   const p = db.projects.find((x) => x.id === id);
   const [commenting, setCommenting] = useState(false);
   const [comment, setComment] = useState('');
+  const canEdit = useCanEdit();
 
   const evolution = useMemo(() => {
     const weeks = sortWeeks(db.weeks);
@@ -47,7 +49,6 @@ export function ProjectDetailPage({ id }: { id: string }) {
   const blocks = db.blocks.filter((b) => b.projectId === p.id).sort((a, b) => Number(a.estado === 'resuelto') - Number(b.estado === 'resuelto') || b.createdAt.localeCompare(a.createdAt));
   const commitments = db.commitments.filter((c) => c.projectId === p.id).sort((a, b) => Number(!isOpenCommitment(a)) - Number(!isOpenCommitment(b)) || `${a.fecha}${a.hora}`.localeCompare(`${b.fecha}${b.hora}`));
   const decisions = db.decisions.filter((d) => d.projectId === p.id);
-  const canEdit = useCanEdit();
   const editable = !!active && active.estado === 'abierta' && canEdit;
   const activeProject = isActiveProject(p);
   const comments = evolution.filter((e) => e.u?.comentario);
@@ -195,6 +196,7 @@ export function ProjectDetailPage({ id }: { id: string }) {
       )}
 
       <PriorityPanel p={p} />
+      <ProjectInvestmentPanel project={p} />
 
       <div className="two-col">
         <Section title="Ponderación de la gerencia">

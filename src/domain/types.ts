@@ -150,6 +150,205 @@ export interface PriorityLog {
   createdAt: ISODateTime;
 }
 
+// ═══ Inversión, KPIs y Resultados ════════════════════════════════════════════
+// Relaciones por identificador (tablas de asociación), nunca por nombre.
+
+/** Estado de validación de una cifra o registro. */
+export type Validacion = 'CONFIRMADO' | 'PENDIENTE' | 'PROPUESTA';
+/** Periodo de una cifra: fechas inclusivas `YYYY-MM-DD`. */
+export interface Periodo {
+  inicio: ISODate;
+  fin: ISODate;
+  etiqueta?: string;
+}
+/** Trazabilidad de una cifra. */
+export interface Fuente {
+  fuente: string;
+  corte?: string;
+  estado: Validacion;
+  nota?: string;
+  /** Discrepancia detectada contra otra fuente: se muestra hasta que Dirección la resuelva. */
+  discrepancia?: string;
+}
+
+export interface StrategicObjective extends BaseEntity {
+  clave: string;
+  nombre: string;
+  descripcion?: string;
+  orden: number;
+  estado: Validacion;
+}
+
+/** A Posicionamiento · B Demanda · C Franquicias · D Desarrollo y retención · E Contenido · F Eficiencia operativa */
+export type KpiGrupo = 'A' | 'B' | 'C' | 'D' | 'E' | 'F';
+export type KpiTipo = 'actividad' | 'desempeno' | 'eficiencia' | 'rentabilidad' | 'marca';
+export type KpiSentido = 'mayor' | 'menor' | 'rango';
+
+export interface Kpi extends BaseEntity {
+  clave: string;
+  nombre: string;
+  definicion: string;
+  grupo: KpiGrupo;
+  tipo: KpiTipo;
+  objetivoId?: ID;
+  /** Gerencias responsables (id de Area). */
+  areaIds: ID[];
+  unidad: string;
+  sentido: KpiSentido;
+  /** Para `rango`: límites aceptables. */
+  rangoMin?: number;
+  rangoMax?: number;
+  /** Cómo se suman resultados de varios periodos: `suma` (conteos) o `ultimo` (tasas, saldos). */
+  agregacion: 'suma' | 'ultimo';
+  fuente: string;
+  estado: Validacion;
+  activo: boolean;
+  discrepancia?: string;
+}
+
+export interface KpiTarget extends BaseEntity, Fuente {
+  kpiId: ID;
+  periodo: Periodo;
+  meta: number;
+}
+
+/** Resultado medido. Sin `kpiId` queda «pendiente de vinculación». Cada resultado se cuenta una sola vez. */
+export interface ResultRecord extends BaseEntity, Fuente {
+  kpiId?: ID;
+  /** Nombre de la métrica tal como viene en la fuente. */
+  metrica: string;
+  valor: number;
+  unidad: string;
+  periodo: Periodo;
+  /** Fecha en que se actualizó la cifra en la fuente. */
+  actualizado?: ISODate;
+  /** Proyecto/iniciativa al que se atribuye directamente (opcional; la relación general es proyecto → KPI). */
+  projectId?: ID;
+}
+
+export interface BudgetLine extends BaseEntity, Fuente {
+  clave: string;
+  nombre: string;
+  /** Presupuesto autorizado inicial (antes de ampliaciones y transferencias). */
+  original: number;
+  /** Categorías del reporte contable que se cargan a esta partida. */
+  categoriasContables: string[];
+  /** Fondo revolvente (p. ej. SOC Store): el gasto se concilia contra ventas y reinversión. */
+  revolvente?: boolean;
+  /** Reserva no asignada. */
+  reserva?: boolean;
+  areaId?: ID;
+  orden: number;
+}
+
+export type BudgetMovementTipo = 'ampliacion' | 'reduccion' | 'transferencia' | 'reclasificacion';
+
+/**
+ * Movimiento presupuestal. Una transferencia es UN registro con origen y destino:
+ * mueve dinero entre partidas sin cambiar el total. La reclasificación mueve GASTO
+ * contable entre partidas (análisis directivo) y nunca cambia el presupuesto.
+ */
+export interface BudgetMovement extends BaseEntity, Fuente {
+  folio: string;
+  tipo: BudgetMovementTipo;
+  deLineaId?: ID;
+  aLineaId?: ID;
+  /** Para reclasificaciones de una categoría contable sin partida (p. ej. Content Marketing). */
+  deCategoria?: string;
+  /** Monto; en reclasificación de categoría completa puede omitirse (se toma el gasto de la categoría). */
+  monto?: number;
+  concepto: string;
+  fecha?: ISODate;
+  autorizadoPor?: string;
+}
+
+/** Gasto ejercido (reporte contable) por categoría contable y mes. */
+export interface SpendRecord extends BaseEntity, Fuente {
+  categoria: string;
+  /** `YYYY-MM` */
+  mes: string;
+  monto: number;
+}
+
+/** Gasto comprometido (o ejercido con detalle de proyecto). */
+export interface BudgetCommitment extends BaseEntity, Fuente {
+  lineaId: ID;
+  projectId?: ID;
+  concepto: string;
+  monto: number;
+  fecha: ISODate;
+  situacion: 'comprometido' | 'ejercido' | 'cancelado';
+}
+
+/** Partida ↔ proyecto: cuánto de una partida financia un proyecto. */
+export interface BudgetAllocation extends BaseEntity {
+  lineaId: ID;
+  projectId: ID;
+  monto: number;
+  nota?: string;
+  estado: Validacion;
+}
+
+/** Proyecto ↔ KPI. */
+export interface ProjectKpi extends BaseEntity {
+  projectId: ID;
+  kpiId: ID;
+  contribucion: 'directa' | 'indirecta';
+  nota?: string;
+}
+
+/** Proyecto ↔ gerencia colaboradora (además del área responsable del proyecto). */
+export interface ProjectArea extends BaseEntity {
+  projectId: ID;
+  areaId: ID;
+  rol: string;
+}
+
+/** Ingreso o beneficio económico atribuible y verificable (para ROAS / ROI). */
+export interface Revenue extends BaseEntity, Fuente {
+  concepto: string;
+  /**
+   * `ingreso_publicidad`: ingreso atribuible a la publicidad (ROAS).
+   * `beneficio_economico`: beneficio económico atribuible (margen o utilidad, NO ingreso bruto) para ROI.
+   * Nunca el monto de colocación hipotecaria.
+   */
+  tipo: 'ingreso_publicidad' | 'beneficio_economico';
+  monto: number;
+  periodo: Periodo;
+  scopeId?: ID;
+}
+
+/**
+ * Alcance de eficiencia: una inversión atribuible y los resultados que produjo,
+ * del MISMO alcance y periodo. Es la única base para CPL, costo por MQL/SQL/cierre,
+ * CPA, ROAS y ROI.
+ */
+export interface EfficiencyScope extends BaseEntity, Fuente {
+  nombre: string;
+  areaId?: ID;
+  projectIds: ID[];
+  lineaIds: ID[];
+  periodo: Periodo;
+  /** Inversión atribuible al alcance (null = no identificada). */
+  inversion: number | null;
+  /** Qué incluye la inversión (pauta, honorarios, producción…). */
+  inversionIncluye?: string;
+  /** KPIs del embudo, por etapa. */
+  etapas: { leads?: ID; mql?: ID; sql?: ID; cierres?: ID; clientes?: ID };
+  /** Gasto publicitario dentro de la inversión (para ROAS). */
+  gastoPublicitario?: number | null;
+  /** Costos y beneficios que se consideran para ROI. */
+  criterioRoi?: string;
+}
+
+/** Pesos del índice complementario de atención (propuesta configurable; no cambia la prioridad oficial). */
+export interface InvestmentPriorityConfig {
+  aprobado: boolean;
+  pesos: { impacto: number; urgencia: number; dependencia: number; riesgo: number; avance: number; kpis: number; inversion: number; fecha: number };
+  /** Tope de la contribución de la inversión (evita que el dinero domine). */
+  topeInversion: number;
+}
+
 export interface Week {
   id: ID;
   numero: number;
@@ -365,6 +564,10 @@ export interface Settings {
   priorityMatrix?: PriorityMatrix;
   /** 2 = modelo de prioridad estratégica + operativa ya aplicado a los datos. */
   priorityModel?: number;
+  /** Índice complementario de atención (Inversión, KPIs y Resultados). */
+  investmentPriority?: InvestmentPriorityConfig;
+  /** Fecha de corte contable vigente (`YYYY-MM`). */
+  corteContable?: string;
   schemaVersion: number;
   updatedAt: ISODateTime;
 }
@@ -383,6 +586,19 @@ export interface DbData {
   snapshots: WeekSnapshot[];
   settings: Settings[];
   priorityLog: PriorityLog[];
+  objectives: StrategicObjective[];
+  kpis: Kpi[];
+  kpiTargets: KpiTarget[];
+  results: ResultRecord[];
+  budgetLines: BudgetLine[];
+  budgetMovements: BudgetMovement[];
+  spend: SpendRecord[];
+  budgetCommitments: BudgetCommitment[];
+  budgetAllocations: BudgetAllocation[];
+  projectKpis: ProjectKpi[];
+  projectAreas: ProjectArea[];
+  revenues: Revenue[];
+  efficiencyScopes: EfficiencyScope[];
 }
 
 export type CollectionName = keyof DbData;
@@ -402,4 +618,33 @@ export const COLLECTIONS: CollectionName[] = [
   'snapshots',
   'settings',
   'priorityLog',
+  'objectives',
+  'kpis',
+  'kpiTargets',
+  'results',
+  'budgetLines',
+  'budgetMovements',
+  'spend',
+  'budgetCommitments',
+  'budgetAllocations',
+  'projectKpis',
+  'projectAreas',
+  'revenues',
+  'efficiencyScopes',
+];
+
+/** Colecciones del módulo Inversión, KPIs y Resultados. */
+export const INVESTMENT_COLLECTIONS: CollectionName[] = COLLECTIONS.slice(COLLECTIONS.indexOf('objectives'));
+/** Cifras financieras y catálogo: sólo Dirección / Administración las modifican (también en el servidor). */
+export const DIRECTION_ONLY_COLLECTIONS: CollectionName[] = [
+  'objectives',
+  'kpis',
+  'kpiTargets',
+  'budgetLines',
+  'budgetMovements',
+  'spend',
+  'budgetCommitments',
+  'budgetAllocations',
+  'revenues',
+  'efficiencyScopes',
 ];

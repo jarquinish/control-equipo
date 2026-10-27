@@ -202,6 +202,90 @@ do $$ declare ok boolean := false; begin
   assert ok, 'extraño no escribe';
 end $$;
 
+-- 4b. Inversión, KPIs y Resultados (0004)
+reset role;
+select set_config('request.jwt.claims', '', false) \gset
+insert into public.au_members (email, rol) values ('gerente2@soc.mx', 'GERENTE') on conflict (email) do nothing;
+set role authenticated;
+select pg_temp.as_user('admin@soc.mx') \gset
+insert into public.au_records (collection, id, data) values
+  ('budgetLines', 'L1', '{"id":"L1","clave":"01","nombre":"Partida 1","original":1000,"categoriasContables":["Cat A"],"fuente":"prueba","estado":"CONFIRMADO","orden":1}'),
+  ('budgetLines', 'L2', '{"id":"L2","clave":"02","nombre":"Partida 2","original":500,"categoriasContables":["Cat B"],"fuente":"prueba","estado":"CONFIRMADO","orden":2}'),
+  ('budgetMovements', 'T1', '{"id":"T1","folio":"T1","tipo":"transferencia","deLineaId":"L1","aLineaId":"L2","monto":200,"concepto":"x","fuente":"prueba","estado":"CONFIRMADO"}'),
+  ('budgetMovements', 'A1', '{"id":"A1","folio":"A1","tipo":"ampliacion","aLineaId":"L1","monto":100,"concepto":"x","fuente":"prueba","estado":"PENDIENTE"}'),
+  ('spend', 'S1', '{"id":"S1","categoria":"Cat A","mes":"2026-01","monto":300,"fuente":"prueba","estado":"CONFIRMADO"}'),
+  ('kpis', 'K1', '{"id":"K1","clave":"K-1","nombre":"Leads","definicion":"x","grupo":"B","tipo":"actividad","areaIds":[],"unidad":"leads","sentido":"mayor","agregacion":"suma","fuente":"HubSpot","estado":"CONFIRMADO","activo":true}'),
+  ('budgetAllocations', 'AS1', '{"id":"AS1","lineaId":"L1","projectId":"p1","monto":800,"estado":"CONFIRMADO"}');
+do $$ begin
+  assert public.au_linea_vigente('L1') = 800, 'vigente = inicial − transferencia (la ampliación pendiente no cuenta)';
+  assert public.au_linea_vigente('L2') = 700, 'vigente destino';
+  assert (select vigente from public.au_budget_v where id = 'L1') = 800 and (select ejercido_contable from public.au_budget_v where id = 'L1') = 300, 'vista de presupuesto';
+end $$;
+do $$ declare ok boolean := false; begin
+  begin insert into public.au_records (collection, id, data) values ('budgetAllocations', 'AS2', '{"id":"AS2","lineaId":"L1","projectId":"p3","monto":1,"estado":"CONFIRMADO"}');
+  exception when check_violation then ok := true; end;
+  assert ok, 'no asigna más que el vigente';
+end $$;
+do $$ declare ok boolean := false; begin
+  begin update public.au_records set data = jsonb_set(data, '{monto}', '801') where id = 'AS1';
+  exception when check_violation then ok := true; end;
+  assert ok, 'tampoco al editar la asignación';
+end $$;
+do $$ declare ok boolean := false; begin
+  begin insert into public.au_records (collection, id, data) values ('spend', 'S2', '{"id":"S2","categoria":"cat a","mes":"2026-01","monto":1,"fuente":"x","estado":"CONFIRMADO"}');
+  exception when unique_violation then ok := true; end;
+  assert ok, 'sin gasto duplicado por categoría y mes';
+end $$;
+do $$ declare ok boolean := false; begin
+  begin insert into public.au_records (collection, id, data) values ('budgetMovements', 'T2', '{"id":"T2","folio":"T2","tipo":"transferencia","deLineaId":"L1","aLineaId":"L1","monto":1,"concepto":"x","fuente":"x","estado":"CONFIRMADO"}');
+  exception when check_violation then ok := true; end;
+  assert ok, 'transferencia con origen = destino rechazada';
+end $$;
+do $$ declare ok boolean := false; begin
+  begin insert into public.au_records (collection, id, data) values ('revenues', 'I1', '{"id":"I1","concepto":"Colocación hipotecaria","tipo":"beneficio_economico","monto":1,"fuente":"x","estado":"PENDIENTE"}');
+  exception when check_violation then ok := true; end;
+  assert ok, 'colocación hipotecaria no es ingreso';
+end $$;
+do $$ declare ok boolean := false; begin
+  begin insert into public.au_records (collection, id, data) values ('kpis', 'K2', '{"id":"K2","clave":"K-2","nombre":"x","fuente":" "}');
+  exception when check_violation then ok := true; end;
+  assert ok, 'KPI sin fuente rechazado';
+end $$;
+-- Gerencia: no toca cifras; vincula y captura resultados pendientes
+select pg_temp.as_user('gerente2@soc.mx') \gset
+do $$ declare ok boolean := false; begin
+  begin insert into public.au_records (collection, id, data) values ('budgetLines', 'L3', '{"id":"L3","clave":"03","nombre":"x","original":1,"fuente":"x"}');
+  exception when insufficient_privilege then ok := true; end;
+  assert ok, 'gerente no crea partidas';
+end $$;
+do $$ declare ok boolean := false; begin
+  begin update public.au_records set data = jsonb_set(data, '{monto}', '1') where id = 'S1';
+  exception when insufficient_privilege then ok := true; end;
+  assert ok, 'gerente no modifica gasto';
+end $$;
+insert into public.au_records (collection, id, data) values
+  ('projectKpis', 'PK1', '{"id":"PK1","projectId":"p1","kpiId":"K1","contribucion":"directa"}'),
+  ('results', 'R1', '{"id":"R1","kpiId":"K1","metrica":"Leads","valor":10,"unidad":"leads","periodo":{"inicio":"2026-01-01","fin":"2026-01-31"},"fuente":"HubSpot","estado":"PENDIENTE"}');
+do $$ declare ok boolean := false; begin
+  begin insert into public.au_records (collection, id, data) values ('results', 'R2', '{"id":"R2","kpiId":"K1","metrica":"Leads","valor":11,"unidad":"leads","periodo":{"inicio":"2026-02-01","fin":"2026-02-28"},"fuente":"HubSpot","estado":"CONFIRMADO"}');
+  exception when insufficient_privilege then ok := true; end;
+  assert ok, 'gerente no confirma resultados';
+end $$;
+do $$ declare ok boolean := false; begin
+  begin insert into public.au_records (collection, id, data) values ('results', 'R3', '{"id":"R3","kpiId":"K1","metrica":"Leads otra vez","valor":12,"unidad":"leads","periodo":{"inicio":"2026-01-01","fin":"2026-01-31"},"fuente":"HubSpot","estado":"PENDIENTE"}');
+  exception when unique_violation then ok := true; end;
+  assert ok, 'sin resultado duplicado por KPI y periodo';
+end $$;
+select pg_temp.as_user('admin@soc.mx') \gset
+update public.au_records set data = jsonb_set(data, '{estado}', '"CONFIRMADO"') where id = 'R1';
+select pg_temp.as_user('gerente2@soc.mx') \gset
+do $$ declare ok boolean := false; begin
+  begin update public.au_records set data = jsonb_set(data, '{valor}', '99') where id = 'R1';
+  exception when insufficient_privilege then ok := true; end;
+  assert ok, 'gerente no modifica un resultado confirmado';
+end $$;
+do $$ begin assert (select count(*) from public.au_results_v where kpi_clave = 'K-1') = 1, 'vista de resultados'; end $$;
+
 -- 4. Integridad: id del documento debe coincidir
 select pg_temp.as_user('admin@soc.mx') \gset
 do $$ declare ok boolean := false; begin
@@ -210,10 +294,11 @@ do $$ declare ok boolean := false; begin
   assert ok, 'id incongruente rechazado';
 end $$;
 
--- 5. Restaurar respaldo (admin)
+-- 5. Restaurar respaldo (admin) · incluye las colecciones de inversión aunque la asignación llegue antes que su partida
 do $$ begin
-  assert public.au_replace_all('{"areas":[{"id":"a1","nombre":"Diseño"}],"projects":[{"id":"p2","nombre":"Nuevo"}],"priorityLog":[{"id":"l9","projectId":"p2"}],"desconocida":[{"id":"z"}]}') = 3, 'restaura 3';
-  assert (select count(*) from public.au_records) = 3, 'reemplazó todo (incluida la bitácora)';
+  assert public.au_replace_all('{"areas":[{"id":"a1","nombre":"Diseño"}],"projects":[{"id":"p2","nombre":"Nuevo"}],"priorityLog":[{"id":"l9","projectId":"p2"}],"budgetAllocations":[{"id":"AS9","lineaId":"L9","projectId":"p2","monto":5}],"budgetLines":[{"id":"L9","clave":"09","nombre":"x","original":5,"fuente":"x"}],"desconocida":[{"id":"z"}]}') = 5, 'restaura 5';
+  assert (select count(*) from public.au_records) = 5, 'reemplazó todo (incluida la bitácora y la inversión)';
+  assert coalesce(current_setting('au.restaurando', true), 'off') <> 'on', 'la marca de restauración no queda activa';
   assert not exists (select 1 from public.au_records where id = 'z'), 'ignora colecciones desconocidas';
 end $$;
 

@@ -3,7 +3,7 @@
 --
 -- Ejecutar completo en: Supabase → SQL Editor → New query → Run.
 -- Es idempotente: se puede volver a ejecutar sin perder información.
--- Si ya ejecutaste 0002 y 0003, vuelve a ejecutarlos después de este archivo.
+-- Si ya ejecutaste 0002, 0003 y 0004, vuelve a ejecutarlos después de este archivo.
 --
 -- Diseño:
 --   · au_members   → quién tiene acceso (por correo) y con qué rol.
@@ -63,7 +63,9 @@ $$;
 create table if not exists public.au_records (
   collection text not null check (collection in (
     'areas', 'people', 'projects', 'weeks', 'weeklyUpdates', 'areaUpdates',
-    'blocks', 'commitments', 'sessions', 'decisions', 'snapshots', 'settings', 'priorityLog'
+    'blocks', 'commitments', 'sessions', 'decisions', 'snapshots', 'settings', 'priorityLog',
+    'objectives', 'kpis', 'kpiTargets', 'results', 'budgetLines', 'budgetMovements', 'spend',
+    'budgetCommitments', 'budgetAllocations', 'projectKpis', 'projectAreas', 'revenues', 'efficiencyScopes'
   )),
   id         text not null,
   data       jsonb not null,
@@ -176,7 +178,9 @@ begin
   ) as item
   where c.key in (
     'areas', 'people', 'projects', 'weeks', 'weeklyUpdates', 'areaUpdates',
-    'blocks', 'commitments', 'sessions', 'decisions', 'snapshots', 'settings', 'priorityLog'
+    'blocks', 'commitments', 'sessions', 'decisions', 'snapshots', 'settings', 'priorityLog',
+    'objectives', 'kpis', 'kpiTargets', 'results', 'budgetLines', 'budgetMovements', 'spend',
+    'budgetCommitments', 'budgetAllocations', 'projectKpis', 'projectAreas', 'revenues', 'efficiencyScopes'
   );
 
   get diagnostics total = row_count;

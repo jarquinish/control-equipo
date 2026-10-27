@@ -26,6 +26,19 @@ export const REST_RESOURCES: Record<CollectionName, string> = {
   snapshots: 'snapshots',
   settings: 'settings',
   priorityLog: 'priority-log',
+  objectives: 'objectives',
+  kpis: 'kpis',
+  kpiTargets: 'kpi-targets',
+  results: 'results',
+  budgetLines: 'budget-lines',
+  budgetMovements: 'budget-movements',
+  spend: 'spend',
+  budgetCommitments: 'budget-commitments',
+  budgetAllocations: 'budget-allocations',
+  projectKpis: 'project-kpis',
+  projectAreas: 'project-areas',
+  revenues: 'revenues',
+  efficiencyScopes: 'efficiency-scopes',
 };
 
 export interface RestAdapterOptions {

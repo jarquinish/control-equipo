@@ -2,7 +2,7 @@ import { normalizeData } from '../data/store';
 import { EXPORT_APP_ID, PRIORITIES, PROJECT_STATUSES, SCHEMA_VERSION } from '../domain/constants';
 import { isValidDate, isValidTime } from '../domain/dates';
 import { isLevel } from '../domain/scoring';
-import { COLLECTIONS, type CollectionName, type DbData } from '../domain/types';
+import { COLLECTIONS, INVESTMENT_COLLECTIONS, type CollectionName, type DbData } from '../domain/types';
 import type { ServiceContext } from './context';
 
 export interface BackupFile {
@@ -31,6 +31,19 @@ const LABELS: Record<CollectionName, string> = {
   snapshots: 'snapshots históricos',
   settings: 'configuración',
   priorityLog: 'bitácora de prioridades',
+  objectives: 'objetivos estratégicos',
+  kpis: 'KPIs',
+  kpiTargets: 'metas de KPI',
+  results: 'resultados',
+  budgetLines: 'partidas presupuestales',
+  budgetMovements: 'movimientos presupuestales',
+  spend: 'gasto contable',
+  budgetCommitments: 'gasto comprometido',
+  budgetAllocations: 'asignaciones partida–proyecto',
+  projectKpis: 'vínculos proyecto–KPI',
+  projectAreas: 'gerencias colaboradoras',
+  revenues: 'ingresos atribuibles',
+  efficiencyScopes: 'alcances de eficiencia',
 };
 export const COLLECTION_LABELS = LABELS;
 
@@ -61,7 +74,8 @@ export function parseBackup(raw: string): ParseResult {
 
   for (const c of COLLECTIONS) {
     if (data[c] === undefined) {
-      warnings.push(`No incluye ${LABELS[c]}; se tomará como vacío.`);
+      // Respaldos anteriores al módulo de inversión no traen sus colecciones: es normal.
+      if (!INVESTMENT_COLLECTIONS.includes(c)) warnings.push(`No incluye ${LABELS[c]}; se tomará como vacío.`);
       continue;
     }
     if (!Array.isArray(data[c])) {

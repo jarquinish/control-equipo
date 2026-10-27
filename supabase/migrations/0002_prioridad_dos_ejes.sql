@@ -18,7 +18,9 @@
 alter table public.au_records drop constraint if exists au_records_collection_check;
 alter table public.au_records add constraint au_records_collection_check check (collection in (
   'areas', 'people', 'projects', 'weeks', 'weeklyUpdates', 'areaUpdates',
-  'blocks', 'commitments', 'sessions', 'decisions', 'snapshots', 'settings', 'priorityLog'
+  'blocks', 'commitments', 'sessions', 'decisions', 'snapshots', 'settings', 'priorityLog',
+    'objectives', 'kpis', 'kpiTargets', 'results', 'budgetLines', 'budgetMovements', 'spend',
+    'budgetCommitments', 'budgetAllocations', 'projectKpis', 'projectAreas', 'revenues', 'efficiencyScopes'
 ));
 
 create index if not exists au_records_plog_project_idx on public.au_records ((data ->> 'projectId')) where collection = 'priorityLog';
@@ -50,7 +52,9 @@ begin
   ) as item
   where c.key in (
     'areas', 'people', 'projects', 'weeks', 'weeklyUpdates', 'areaUpdates',
-    'blocks', 'commitments', 'sessions', 'decisions', 'snapshots', 'settings', 'priorityLog'
+    'blocks', 'commitments', 'sessions', 'decisions', 'snapshots', 'settings', 'priorityLog',
+    'objectives', 'kpis', 'kpiTargets', 'results', 'budgetLines', 'budgetMovements', 'spend',
+    'budgetCommitments', 'budgetAllocations', 'projectKpis', 'projectAreas', 'revenues', 'efficiencyScopes'
   );
 
   get diagnostics total = row_count;

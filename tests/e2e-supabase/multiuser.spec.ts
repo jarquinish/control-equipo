@@ -149,6 +149,12 @@ test('sólo consulta: alta con código, contraseña propia y sin botones de edic
   await expect(lector.getByRole('button', { name: 'Nuevo compromiso' })).toHaveCount(0);
   await lector.goto('/weekly');
   await expect(lector.getByTestId('weekly-readonly')).toBeVisible();
+  // Inversión, KPIs y Resultados: sólo lectura
+  await lector.goto('/inversion?vista=kpis');
+  await expect(lector.getByRole('heading', { name: 'Inversión, KPIs y Resultados' })).toBeVisible();
+  await expect(lector.getByRole('button', { name: 'Registrar resultado' })).toHaveCount(0);
+  await lector.goto('/inversion?vista=datos');
+  await expect(lector.getByText('Los datos financieros, el catálogo de KPIs y las metas los administra Dirección.')).toBeVisible();
 
   // El servidor también rechaza escrituras con su sesión
   const denied = await lector.evaluate(async () => {

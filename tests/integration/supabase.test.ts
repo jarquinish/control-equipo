@@ -58,6 +58,39 @@ describe('SupabaseAdapter (PostgreSQL + PostgREST + RLS)', () => {
     expect(admin.getState().blocks[0].estado).toBe('en_gestion');
   });
 
+  it('Inversión y KPIs: Dirección carga cifras; la gerencia vincula y captura; el servidor bloquea lo financiero', async () => {
+    const admin = new DataStore(new SupabaseAdapter(clientFor('admin@soc.test'), 'tab-inv-a'));
+    await admin.init();
+    admin.role = 'ADMIN';
+    const svc = createServices(admin);
+    const p = admin.getState().projects[0];
+    svc.investment.save('budgetLines', { id: 'L-IT', clave: 'IT', nombre: 'Partida de prueba', original: 1000, categoriasContables: ['Cat IT'], orden: 1, fuente: 'prueba', estado: 'CONFIRMADO' });
+    svc.investment.save('kpis', { id: 'K-IT', clave: 'K-IT', nombre: 'Leads', definicion: 'x', grupo: 'B', tipo: 'actividad', areaIds: [], unidad: 'leads', sentido: 'mayor', agregacion: 'suma', fuente: 'HubSpot', estado: 'CONFIRMADO', activo: true });
+    svc.investment.save('budgetAllocations', { lineaId: 'L-IT', projectId: p.id, monto: 600, estado: 'CONFIRMADO' });
+    await admin.flush();
+    expect(stack.psql(['-tAc', "select vigente, asignado_a_proyectos from au_budget_v where id = 'L-IT'"]).trim()).toBe('1000|600');
+
+    const ger = new DataStore(new SupabaseAdapter(clientFor('gerente@soc.test'), 'tab-inv-g'));
+    await ger.init();
+    const errors: unknown[] = [];
+    ger.onError((e) => errors.push(e));
+    const gsvc = createServices(ger);
+    gsvc.investment.save('projectKpis', { projectId: p.id, kpiId: 'K-IT', contribucion: 'directa' });
+    gsvc.investment.save('results', { kpiId: 'K-IT', metrica: 'Leads', valor: 10, unidad: 'leads', periodo: { inicio: '2026-01-01', fin: '2026-01-31' }, fuente: 'HubSpot', estado: 'PENDIENTE' });
+    await ger.flush();
+    expect(errors).toHaveLength(0);
+    // Saltando la validación de la app, el servidor rechaza cambiar una cifra financiera
+    ger.update('budgetLines', 'L-IT', { original: 999999 });
+    await ger.flush();
+    expect(errors).toHaveLength(1);
+    expect((errors[0] as RemoteError).permission).toBe(true);
+    await ger.reload();
+    expect(ger.get('budgetLines', 'L-IT')!.original).toBe(1000);
+    await admin.reload();
+    expect(admin.getState().results.map((r) => r.estado)).toEqual(['PENDIENTE']);
+    expect(admin.getState().projectKpis).toHaveLength(1);
+  });
+
   it('la RLS rechaza cambios de configuración de un gerente con un error comprensible', async () => {
     const ger = new DataStore(new SupabaseAdapter(clientFor('gerente@soc.test'), 'tab-g2'));
     await ger.init();

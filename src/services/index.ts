@@ -7,6 +7,7 @@ import { blockService } from './blockService';
 import { commitmentService } from './commitmentService';
 import { createContext, type ServiceContext } from './context';
 import { importService } from './importService';
+import { investmentService } from './investmentService';
 import { peopleService } from './peopleService';
 import { priorityService } from './priorityService';
 import { projectService } from './projectService';
@@ -34,6 +35,7 @@ export function createServices(store: DataStore, now: () => Date = () => new Dat
     weeks: weekService(ctx),
     sessions: sessionService(ctx),
     backup: backupService(ctx),
+    investment: investmentService(ctx),
   };
 }
 

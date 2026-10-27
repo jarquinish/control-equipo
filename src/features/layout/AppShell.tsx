@@ -19,6 +19,7 @@ import {
   Eye,
   CalendarPlus,
   LogOut,
+  BarChart3,
 } from 'lucide-react';
 import { fmtDate, fmtShort } from '../../domain/dates';
 import { sortWeeks } from '../../domain/selectors';
@@ -36,6 +37,7 @@ const NAV = [
   { to: '/compromisos', label: 'Compromisos', icon: ClipboardList },
   { to: '/dependencias', label: 'Dependencias', icon: GitFork },
   { to: '/areas', label: 'Áreas', icon: Users },
+  { to: '/inversion', label: 'Inversión y KPIs', icon: BarChart3 },
   { to: '/historial', label: 'Historial', icon: History },
   { to: '/configuracion', label: 'Configuración', icon: SettingsIcon },
 ];

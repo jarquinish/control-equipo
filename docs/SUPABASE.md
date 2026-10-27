@@ -16,7 +16,7 @@ Tiempo estimado: **30–40 minutos** la primera vez. No requiere programar.
 ## 2. Crear las tablas y la seguridad
 
 1. En el proyecto: **SQL Editor → New query**.
-2. Copia todo el contenido de [`supabase/migrations/0001_alignment_unblock.sql`](../supabase/migrations/0001_alignment_unblock.sql), pégalo y presiona **Run**. Repite con [`0002_prioridad_dos_ejes.sql`](../supabase/migrations/0002_prioridad_dos_ejes.sql) (bitácora de prioridades y acuerdo protegido en el servidor) y con [`0003_acceso_consulta.sql`](../supabase/migrations/0003_acceso_consulta.sql) (rol Consulta y alta con código para que cada persona cree su contraseña). Ejecútalos en orden; se pueden volver a ejecutar sin perder información.
+2. Copia todo el contenido de [`supabase/migrations/0001_alignment_unblock.sql`](../supabase/migrations/0001_alignment_unblock.sql), pégalo y presiona **Run**. Repite con [`0002_prioridad_dos_ejes.sql`](../supabase/migrations/0002_prioridad_dos_ejes.sql) (bitácora de prioridades y acuerdo protegido en el servidor) con [`0003_acceso_consulta.sql`](../supabase/migrations/0003_acceso_consulta.sql) (rol Consulta y alta con código para que cada persona cree su contraseña) y con [`0004_inversion_kpis_resultados.sql`](../supabase/migrations/0004_inversion_kpis_resultados.sql) (Inversión, KPIs y Resultados; ver [INVERSION_KPIS.md](INVERSION_KPIS.md)). Ejecútalos en orden; se pueden volver a ejecutar sin perder información.
 3. En una consulta nueva, date acceso de administrador **con tu correo** y presiona **Run**:
 
    ```sql
@@ -94,6 +94,9 @@ Listo: cada quien entra con su correo y los cambios aparecen en tiempo real para
 | Ajustar prioridad (override), abrir semana | ✓ | ✓ | — | — | — |
 | Áreas y configuración | ✓ | ✓ | — | — | — |
 | Accesos, códigos de alta, restaurar respaldo, borrar todo | ✓ | ✓ | — | — | — |
+| Presupuesto, gasto, movimientos, KPIs, metas, alcances de eficiencia | ✓ | ✓ | — | — | — |
+| Vincular proyectos con KPIs y gerencias; capturar resultados (pendientes) | ✓ | ✓ | ✓ | ✓ | — |
+| Confirmar resultados | ✓ | ✓ | — | — | — |
 
 \* La interfaz orienta al colaborador a gestionar compromisos.
 
@@ -108,7 +111,7 @@ Listo: cada quien entra con su correo y los cambios aparecen en tiempo real para
 - `au_altas`: códigos de alta pendientes (sólo su huella SHA-256; vencen en 30 días). Mientras un correo tenga código pendiente, sólo entra quien lo canjea (`au_completar_alta`). Una sesión con contraseña sólo entra si su cuenta está vinculada al correo; las sesiones por código de correo o Microsoft comprueban el correo y entran directamente.
 - RLS: sólo miembros activos leen/escriben; áreas, configuración y accesos sólo Admin/Dirección; restaurar (`au_replace_all`) y borrar (`au_clear`) sólo Admin/Dirección.
 - Tiempo real: `au_records` está en la publicación `supabase_realtime`; cada pestaña ignora el eco de sus propios cambios.
-- Vistas para reportes: `au_projects_v`, `au_commitments_v`, `au_blocks_v` (columnas tipadas, respetan la RLS) — útiles para Power BI.
+- Vistas para reportes: `au_projects_v`, `au_commitments_v`, `au_blocks_v`, `au_budget_v`, `au_kpis_v`, `au_results_v`, `au_project_investment_v` (columnas tipadas, respetan la RLS) — útiles para Power BI.
 - Si el servidor rechaza un cambio (p. ej. por rol), la app avisa y vuelve a cargar la versión del servidor.
 
 ## Límites a considerar

@@ -18,6 +18,7 @@ import { HistoryPage, WeekHistoryPage } from './features/history/HistoryPage';
 import { SettingsPage } from './features/settings/SettingsPage';
 import { WeeklyPage } from './features/weekly/WeeklyPage';
 import { MeetingMode } from './features/weekly/MeetingMode';
+import { InvestmentPage } from './features/investment/InvestmentPage';
 import { EmptyState } from './ui/common';
 import { Link } from './state/router';
 
@@ -38,6 +39,7 @@ function Routes() {
   else if (path === '/areas') page = <AreasPage />;
   else if ((m = match('/areas/:id', path))) page = <AreaDashboard key={m.id} id={m.id} />;
   else if (path === '/actualizar') page = <AreaUpdatePage />;
+  else if (path === '/inversion') page = <InvestmentPage />;
   else if (path === '/historial') page = <HistoryPage />;
   else if ((m = match('/historial/:id', path))) page = <WeekHistoryPage key={m.id} id={m.id} />;
   else if (path === '/configuracion') page = <SettingsPage />;

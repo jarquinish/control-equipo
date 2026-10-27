@@ -1,7 +1,8 @@
 import { COLLECTIONS, type CollectionName, type DbData } from '../../domain/types';
 import type { ChangeOp, StorageAdapter } from './StorageAdapter';
 
-const DB_VERSION = 1;
+/** 2: colecciones de Inversión, KPIs y Resultados (se crean al abrir; lo existente no se toca). */
+const DB_VERSION = 2;
 
 function promisify<T>(req: IDBRequest<T>): Promise<T> {
   return new Promise((resolve, reject) => {

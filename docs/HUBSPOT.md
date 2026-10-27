@@ -8,6 +8,8 @@ La app se publica como **una página de HubSpot** creada con una **plantilla de 
 | `0001_alignment_unblock.sql` | Tablas y seguridad de la base de datos. | Quien administre Supabase |
 | `0002_prioridad_dos_ejes.sql` | Prioridad en dos ejes: bitácora inalterable y acuerdo de prioridades protegido en el servidor. | Quien administre Supabase |
 | `0003_acceso_consulta.sql` | Rol **Consulta** (sólo lectura) y alta con código: cada persona crea su propia contraseña. | Quien administre Supabase |
+| `0004_inversion_kpis_resultados.sql` | Módulo **Inversión, KPIs y Resultados**: colecciones, permisos financieros e integridad en el servidor. | Quien administre Supabase |
+| `paquete-inversion-*.json` | Presupuesto, gasto contable, catálogo de KPIs y resultados validados (se carga desde la herramienta; no va en el repositorio). | Dirección |
 | `Plantilla_Inventario_Alignment_Unblock.xlsx` | Formato para que cada área cargue sus proyectos. | Gerentes |
 
 > **No subas el .html al Administrador de archivos (Files).** HubSpot sirve los .html de *Files* como texto plano en su dominio y la app no abriría. Va en el **Design Manager** como plantilla.
@@ -19,7 +21,7 @@ Tiempo estimado: 45–60 min la primera vez.
 ## 1. Base de datos (Supabase)
 
 1. <https://supabase.com> → **New project** → nombre `alignment-unblock`, región *East US* (o la más cercana). Guarda la contraseña.
-2. **SQL Editor → New query** → pega todo `0001_alignment_unblock.sql` → **Run**. Después, en otra consulta, `0002_prioridad_dos_ejes.sql` → **Run**, y luego `0003_acceso_consulta.sql` → **Run**.
+2. **SQL Editor → New query** → pega todo `0001_alignment_unblock.sql` → **Run**. Después, en otra consulta, `0002_prioridad_dos_ejes.sql` → **Run**, luego `0003_acceso_consulta.sql` → **Run** y luego `0004_inversion_kpis_resultados.sql` → **Run**.
 3. Nueva consulta, con el correo de quien administrará la herramienta → **Run**:
 
    ```sql
@@ -97,6 +99,10 @@ Cuando Resend esté listo: plantilla con `{{ .Token }}`, `emailCode: true` y pub
 
 Design Manager → abre `alignment-unblock` → copia tu bloque `AU_CONFIG` → pega el nuevo archivo completo → vuelve a poner tu bloque `AU_CONFIG` → **Publicar cambios**. Los datos no se tocan (están en Supabase). Los `.sql` se pueden ejecutar varias veces sin perder información. La primera vez que Dirección entra a la versión nueva, los ajustes del modelo anterior quedan como *nota por revalidar* y se calcula la clasificación de todos los proyectos.
 
+## Inversión, KPIs y Resultados (primer uso)
+
+Después de publicar la versión con el módulo (y de ejecutar `0004`), Dirección entra → **Inversión y KPIs** → **Datos y configuración** → **Elegir paquete** → revisa discrepancias y gerencias → **Agregar**. Sólo agrega registros; no toca proyectos ni prioridades. Cada mes: **Actualizar gasto contable** con el Excel del ejercicio (hoja RESUMEN). Detalle en [INVERSION_KPIS.md](INVERSION_KPIS.md).
+
 ## Si algo no funciona
 
 | Síntoma | Causa probable |
@@ -109,6 +115,7 @@ Design Manager → abre `alignment-unblock` → copia tu bloque `AU_CONFIG` → 
 | «El registro está desactivado» / «pidió confirmar el correo» | Revisa el paso 1 de *Acceso con contraseña* (sign up activado, Confirm email desactivado) y genera un código nuevo. |
 | No llega el código | SMTP sin configurar o el correo en cuarentena; revisar paso 1.6. |
 | «Tu rol no permite guardar este cambio» al validar prioridades | Falta ejecutar `0002_prioridad_dos_ejes.sql`, o la persona no tiene rol Dirección/Administrador. |
+| «Tu rol no permite guardar este cambio» en Inversión y KPIs | Falta ejecutar `0004_inversion_kpis_resultados.sql`, o la persona no es Dirección/Administrador (las cifras financieras, KPIs y metas son sólo de Dirección). |
 | Error al conectar | El dominio tiene una política de seguridad (CSP) que bloquea `*.supabase.co`; agrégalo a `connect-src`. |
 
 Cómo se generó: `npm run build:hubspot` → `dist-hubspot/alignment-unblock-hubspot.html` (un solo archivo, rutas con `#`, el código de la app dentro de `{% raw %}` para que HubL no lo procese). Prueba automática: `npm run test:e2e:hubspot` (simula la página de HubSpot contra una base tipo Supabase local: inicio de sesión, importación de Excel por dos usuarios y datos compartidos).
